@@ -35,7 +35,7 @@ const ApplyForm = () => {
     setMessage('');
 
     try {
-      const response = await fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors', // IMPORTANT: This is required to bypass CORS restrictions for the Apps Script endpoint.
         headers: {
@@ -49,7 +49,7 @@ const ApplyForm = () => {
       // In a production scenario with a custom backend, you would check `response.ok`.
       setSubmissionStatus('success');
       setMessage('Application submitted successfully! We will get in touch with you shortly.');
-      
+
       // Clear the form after a delay
       setTimeout(() => {
         setFormData({ name: '', email: '', phone: '', message: '' });
@@ -65,23 +65,23 @@ const ApplyForm = () => {
   const isFormDisabled = submissionStatus === 'loading' || submissionStatus === 'success';
 
   return (
-    <div className="bg-background text-secondary min-h-screen font-sans flex items-center justify-center py-12 px-4">
-      <motion.div 
+    <div className="bg-transparent text-secondary min-h-screen font-sans flex flex-col items-center justify-center py-24 px-4 relative z-10">
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="max-w-xl w-full bg-background-100 rounded-2xl shadow-xl p-8 md:p-12 border border-gray-800"
+        className="max-w-xl w-full bg-background/40 backdrop-blur-xl rounded-[2rem] shadow-[0_0_50px_rgba(65,200,223,0.15)] p-8 md:p-12 border border-secondary/10 relative"
       >
         <div className="flex items-center mb-6">
-          <button onClick={() => navigate(-1)} className="text-primary hover:text-yellow-500 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+          <button onClick={() => navigate(-1)} className="text-[#41c8df] hover:text-secondary transition-colors" title="Go back">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
           </button>
           <h2 className="text-3xl font-display font-bold text-center flex-grow">Apply for Course</h2>
         </div>
         <p className="text-center text-gray-400 mb-8">
-          Fill out the form below to apply for: <span className="text-primary font-semibold">{courseId}</span>
+          Fill out the form below to apply for: <span className="text-[#41c8df] font-semibold">{courseId}</span>
         </p>
-        
+
         {submissionStatus === 'success' && (
           <div className="bg-green-900/50 text-green-300 p-4 rounded-lg mb-6 text-center">
             {message}
@@ -92,7 +92,7 @@ const ApplyForm = () => {
             {message}
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-300">Full Name</label>
@@ -103,7 +103,7 @@ const ApplyForm = () => {
               value={formData.name}
               onChange={handleChange}
               required
-              className="mt-1 block w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+              className="mt-1 block w-full px-4 py-4 bg-secondary/5 border border-secondary/10 rounded-xl text-secondary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#41c8df] focus:border-transparent transition-all"
               disabled={isFormDisabled}
             />
           </div>
@@ -116,7 +116,7 @@ const ApplyForm = () => {
               value={formData.email}
               onChange={handleChange}
               required
-              className="mt-1 block w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+              className="mt-1 block w-full px-4 py-4 bg-secondary/5 border border-secondary/10 rounded-xl text-secondary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#41c8df] focus:border-transparent transition-all"
               disabled={isFormDisabled}
             />
           </div>
@@ -129,7 +129,7 @@ const ApplyForm = () => {
               value={formData.phone}
               onChange={handleChange}
               required
-              className="mt-1 block w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+              className="mt-1 block w-full px-4 py-4 bg-secondary/5 border border-secondary/10 rounded-xl text-secondary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#41c8df] focus:border-transparent transition-all"
               disabled={isFormDisabled}
             />
           </div>
@@ -141,13 +141,13 @@ const ApplyForm = () => {
               rows={4}
               value={formData.message}
               onChange={handleChange}
-              className="mt-1 block w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+              className="mt-1 block w-full px-4 py-4 bg-secondary/5 border border-secondary/10 rounded-xl text-secondary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#41c8df] focus:border-transparent transition-all resize-none"
               disabled={isFormDisabled}
             ></textarea>
           </div>
           <button
             type="submit"
-            className="w-full bg-[#41c8df] text-black font-bold py-3 px-6 rounded-lg transition-all duration-300 hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-[#41c8df] text-black font-black py-4 px-6 rounded-xl transition-all duration-300 hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#41c8df] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 uppercase tracking-widest shadow-[0_0_20px_rgba(65,200,223,0.3)] hover:shadow-[0_0_30px_rgba(65,200,223,0.5)]"
             disabled={isFormDisabled}
           >
             {submissionStatus === 'loading' && (

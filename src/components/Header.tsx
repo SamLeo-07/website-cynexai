@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 
@@ -10,6 +10,7 @@ const navItems = [
   { name: 'Reviews', href: '#reviews' },
   { name: 'Contact', href: '#contact' },
   { name: 'Gallery', href: '/gallery' },
+  { name: 'Blog', href: '/blog' },
   // 'Pay Now' has been removed as requested.
   { name: 'About Us', href: '/about' }, // Added 'About Us' link
 ];
@@ -26,7 +27,25 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleNavClick = (href, e) => {
+  // Listen for scrollToId in location state (e.g., from Footer links or other pages)
+  useEffect(() => {
+    if (location.pathname === '/' && (location.state as any)?.scrollToId) {
+      const targetId = (location.state as any).scrollToId;
+      console.log(`[Header] Navigation state detected. Attempting to scroll to: ${targetId}`);
+      
+      const timer = setTimeout(() => {
+        const element = document.getElementById(targetId);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+          // Clean up state
+          navigate('/', { replace: true, state: {} });
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [location, navigate]);
+
+  const handleNavClick = (href: string, e: React.MouseEvent) => {
     e.preventDefault(); // Always prevent default, we're handling navigation
     setIsOpen(false); // Close mobile menu on click
     console.log(`[Header] Link clicked: ${href}`);
@@ -65,27 +84,27 @@ export default function Header() {
     <motion.header
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-[#41c8df]/95 backdrop-blur-md border-b border-[#41c8df]/20'
-          : 'bg-transparent'
-      }`}
+      // Ultra-premium glassmorphism based on scroll state
+      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 border-b border-black/10 bg-[#41c8df] shadow-lg ${scrolled ? 'py-0' : 'py-2'}`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* HEADER CONTAINER: Fixed height back to original compact size */}
         <div className="flex justify-between items-center h-16 lg:h-20"> {/* Original compact height */}
           {/* Logo */}
-          <a
-            href="/"
-            onClick={(e) => handleNavClick('/', e)}
+          <Link
+            to="/"
+            onClick={() => {
+              setIsOpen(false);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             className="flex items-center h-full"
           >
             <img
               src="/CynexAI Logo new (1).png"
               alt="CynexAI Logo"
-              className="h-14 w-auto lg:h-19" // Adjusted to be a bit smaller than header's max height (lg:h-19 is a custom size, make sure it's defined or use h-16)
+              className="h-14 w-auto lg:h-16"
             />
-          </a>
+          </Link>
 
           {/* Desktop nav */}
           <nav className="hidden lg:flex items-center space-x-8">
@@ -101,30 +120,25 @@ export default function Header() {
                 <a
                   key={name}
                   href={href}
-                  onClick={(e) => handleNavClick(href, e)} // IMPORTANT: For desktop, `handleNavClick` is still good
-                  className={`relative font-medium transition-colors duration-200 group ${
-                    scrolled
-                      ? isActive ? 'text-white' : 'text-gray-100 hover:text-white'
-                      : isActive ? 'text-black' : 'text-black hover:text-gray-700'
-                  }`}
+                  onClick={(e) => handleNavClick(href, e)}
+                  className={`relative font-bold tracking-wide transition-all duration-300 px-6 py-2.5 rounded-full text-sm uppercase
+                    ${isActive
+                      ? 'bg-background text-secondary shadow-lg'
+                      : 'text-black hover:bg-background/10'
+                    }`}
                 >
                   {name}
-                  <span
-                    className={`absolute -bottom-1 left-0 h-0.5 bg-[#41c8df] transition-all duration-300 ${
-                      isActive ? 'w-full' : 'w-0 group-hover:w-full'
-                    }`}
-                  />
                 </a>
               );
             })}
+
+            {/* Theme Toggle - REMOVED */}
           </nav>
 
           {/* Mobile toggle */}
           <button
             onClick={() => setIsOpen((o) => !o)}
-            className={`lg:hidden p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#41c8df] ${
-              scrolled ? 'text-white hover:text-gray-100' : 'text-black hover:text-gray-700'
-            }`}
+            className="lg:hidden p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-black text-black hover:bg-background/10 transition-colors"
             aria-label="Toggle navigation"
           >
             {isOpen ? <X size={28} /> : <Menu size={28} />}
@@ -139,19 +153,34 @@ export default function Header() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="lg:hidden overflow-hidden bg-white/95 backdrop-blur-md rounded-lg mt-2 shadow-lg"
+              className="lg:hidden overflow-hidden bg-[#41c8df] rounded-lg mt-2 shadow-2xl border border-black/10"
             >
               <div className="px-4 py-4 space-y-3">
-                {navItems.map(({ name, href }) => (
-                  <a
-                    key={name}
-                    href={href}
-                    onClick={(e) => handleNavClick(href, e)} // This onClick is critical for mobile
-                    className="block text-black hover:text-[#41c8df] transition-colors duration-200 py-2 text-lg font-medium"
-                  >
-                    {name}
-                  </a>
-                ))}
+                {navItems.map(({ name, href }) => {
+                  const isActive =
+                    href === '/'
+                      ? location.pathname === '/' && location.hash === ''
+                      : href.startsWith('#')
+                        ? location.pathname === '/' && location.hash === href
+                        : location.pathname === href;
+
+                  return (
+                    <a
+                      key={name}
+                      href={href}
+                      onClick={(e) => handleNavClick(href, e)}
+                      className={`block py-3 px-6 rounded-xl text-lg font-bold transition-all duration-300
+                        ${isActive
+                          ? 'bg-background text-secondary shadow-md'
+                          : 'text-black hover:bg-background/5'
+                        }`}
+                    >
+                      {name}
+                    </a>
+                  );
+                })}
+
+                {/* Mobile Theme Toggle - REMOVED */}
               </div>
             </motion.div>
           )}

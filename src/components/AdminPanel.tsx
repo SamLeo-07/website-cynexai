@@ -1,414 +1,753 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  Users, 
-  Calendar, 
-  Settings, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye,
-  Download,
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface DiagResult {
+  success?: boolean;
+  latency?: string | number;
+  tables?: string[];
+  counts?: Record<string, number>;
+  message?: string;
+}
+import {
+  Plus,
   Search,
-  Filter,
-  BarChart3
+  Edit2,
+  Eye,
+  EyeOff,
+  Trash2,
+  X,
+  Save,
+  AlertCircle,
+  FileText,
+  Image as ImageIcon,
+  Type,
+  Layout,
+  CheckCircle2,
+  Upload,
+  LogOut,
+  ShieldCheck
 } from 'lucide-react';
+import {
+  getPosts,
+  createPost,
+  updatePost,
+  deletePost,
+  togglePostVisibility,
+  Post,
+  generateSlug,
+  initTursoDB,
+  isTursoConfigured,
+  testConnection,
+  clearLocalFallback,
+  populateSampleData
+} from '../lib/turso';
+import { advancedAiPosts } from '../data/aiPosts';
 
 const AdminPanel = () => {
-  const [activeTab, setActiveTab] = useState('applications');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
-  // Mock data
-  const applications = [
-    {
-      id: 'APP001',
-      name: 'Rajesh Kumar',
-      email: 'rajesh@example.com',
-      phone: '+91 9876543210',
-      course: 'Data Science with AI',
-      type: 'student',
-      status: 'pending',
-      appliedAt: '2025-01-10T10:30:00Z'
-    },
-    {
-      id: 'APP002',
-      name: 'Priya Sharma',
-      email: 'priya@example.com',
-      phone: '+91 9876543211',
-      course: 'Machine Learning',
-      type: 'employed',
-      status: 'approved',
-      appliedAt: '2025-01-09T14:15:00Z'
-    },
-    {
-      id: 'APP003',
-      name: 'Amit Patel',
-      email: 'amit@example.com',
-      phone: '+91 9876543212',
-      course: 'Web Development',
-      type: 'student',
-      status: 'rejected',
-      appliedAt: '2025-01-08T09:45:00Z'
-    }
-  ];
-
-  const webinarSessions = [
-    {
-      id: 'WS001',
-      title: 'Introduction to Data Science',
-      instructor: 'Dr. Priya Sharma',
-      date: '2025-01-15',
-      time: '18:00',
-      duration: '2 hours',
-      maxParticipants: 50,
-      registeredEmails: ['student1@example.com', 'student2@example.com'],
-      status: 'scheduled'
-    },
-    {
-      id: 'WS002',
-      title: 'Machine Learning Basics',
-      instructor: 'Rahul Kumar',
-      date: '2025-01-17',
-      time: '19:00',
-      duration: '1.5 hours',
-      maxParticipants: 40,
-      registeredEmails: ['learner1@example.com'],
-      status: 'scheduled'
-    }
-  ];
-
-  const stats = [
-    { label: 'Total Applications', value: applications.length, color: 'from-blue-500 to-cyan-500' },
-    { label: 'Pending Reviews', value: applications.filter(app => app.status === 'pending').length, color: 'from-yellow-500 to-orange-500' },
-    { label: 'Active Sessions', value: webinarSessions.length, color: 'from-purple-500 to-pink-500' },
-    { label: 'Registered Users', value: 156, color: 'from-green-500 to-emerald-500' }
-  ];
-
-  const filteredApplications = applications.filter(app => {
-    const matchesSearch = app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.course.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || app.status === filterStatus;
-    return matchesSearch && matchesFilter;
+  // Form State
+  const [formData, setFormData] = useState<Omit<Post, 'id' | 'date'>>({
+    title: '',
+    content: '',
+    image: '',
+    category: 'AI Insights',
+    isVisible: true
   });
 
-  const handleStatusChange = (appId: string, newStatus: string) => {
-    // In a real app, this would update the database
-    console.log(`Updating application ${appId} status to ${newStatus}`);
+  useEffect(() => {
+    const init = async () => {
+      await initTursoDB();
+      fetchPosts();
+    };
+    init();
+  }, []);
+
+  const fetchPosts = async () => {
+    setLoading(true);
+    try {
+      const { posts: fetchedPosts } = await getPosts({ limit: 100, includeHidden: true });
+      setPosts(fetchedPosts);
+    } catch {
+      setError('Failed to fetch posts');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleExportData = () => {
-    // In a real app, this would generate and download a CSV/Excel file
-    console.log('Exporting application data...');
+  const handleOpenModal = (post?: Post) => {
+    if (post) {
+      setEditingPost(post);
+      setFormData({
+        title: post.title,
+        content: post.content,
+        image: post.image,
+        category: post.category,
+        isVisible: post.isVisible
+      });
+    } else {
+      setEditingPost(null);
+      setFormData({
+        title: '',
+        content: '',
+        image: '',
+        category: 'AI Insights',
+        isVisible: true
+      });
+    }
+    setIsModalOpen(true);
+    setError(null);
   };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit before compression
+        setError('Original image size should be less than 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Max width 800px optimization
+          const MAX_WIDTH = 800;
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Compress to JPEG at 70% quality
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            setFormData(prev => ({ ...prev, image: compressedDataUrl }));
+
+            // Log saving stats
+            const originalSize = file.size / 1024;
+            const compressedSize = Math.round((compressedDataUrl.length * 3 / 4) / 1024);
+            console.log(`Deepmind: Image compressed from ${originalSize.toFixed(0)}KB to ${compressedSize}KB`);
+          }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setError(null);
+
+    try {
+      if (editingPost) {
+        await updatePost({
+          ...formData,
+          id: editingPost.id
+        });
+        setSuccess('Post updated successfully');
+      } else {
+        const newPost: Post = {
+          ...formData,
+          id: generateSlug(formData.title),
+          date: new Date().toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          })
+        };
+        await createPost(newPost);
+        setSuccess('Post created successfully');
+      }
+      setIsModalOpen(false);
+      fetchPosts();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      console.error('Submit Error:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setError(editingPost
+        ? `Update Failed: ${message}`
+        : `Creation Failed: ${message}`
+      );
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleToggleVisibility = async (id: string, currentVisibility: boolean) => {
+    try {
+      await togglePostVisibility(id, !currentVisibility);
+      setPosts(posts.map(p => p.id === id ? { ...p, isVisible: !currentVisibility } : p));
+    } catch {
+      setError('Failed to toggle visibility');
+    }
+  };
+
+  const handleDeletePost = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this post?')) return;
+
+    try {
+      await deletePost(id);
+      setPosts(posts.filter(p => p.id !== id));
+      setSuccess('Post deleted successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch {
+      setError('Failed to delete post');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('cynexai_admin_auth');
+    window.location.reload();
+  };
+
+  const handleRunDiagnostics = async () => {
+    setDiagLoading(true);
+    setError(null);
+    try {
+      const result = await testConnection();
+      setDiagResult(result);
+      if (result.success) {
+        setSuccess('Cloud Connection Verified');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(`Diagnostic Alert: ${result.message}`);
+      }
+    } catch (err: unknown) {
+      setError(`Diagnostic Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
+  const handleResetLocal = () => {
+    if (window.confirm('This will clear your local backup storage. Cloud data will remain. Continue?')) {
+      clearLocalFallback();
+      setPosts([]);
+      setSuccess('Local storage cleared');
+    }
+  };
+
+  const handlePopulateSample = async () => {
+    if (window.confirm('This will add a sample post to verify Cloud connection. Continue?')) {
+      setDiagLoading(true);
+      try {
+        const result = await populateSampleData();
+        if (result?.success) {
+          setSuccess('Sample post injected successfully');
+          fetchPosts();
+        } else {
+          setError('Injection Failed');
+        }
+      } catch (err: unknown) {
+        setError(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setDiagLoading(false);
+      }
+    }
+  };
+
+  const handleGenerateAI = async () => {
+    if (window.confirm('This will add 5 advanced AI articles to your database. Continue?')) {
+      setDiagLoading(true);
+      try {
+        let count = 0;
+        for (const post of advancedAiPosts) {
+          const id = generateSlug(post.title);
+          const exists = posts.some(p => p.id === id);
+          if (!exists) {
+            await createPost({
+              ...post,
+              id,
+              date: new Date().toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+              })
+            });
+            count++;
+          }
+        }
+        setSuccess(`Successfully added ${count} new AI articles!`);
+        fetchPosts();
+      } catch (err: unknown) {
+        setError(`Generation Failed: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setDiagLoading(false);
+      }
+    }
+  };
+
+  const filteredPosts = posts.filter(post =>
+    post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    post.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen pt-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-4xl font-display font-bold mb-4">
-            <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              Admin Dashboard
-            </span>
-          </h1>
-          <p className="text-gray-300">Manage applications, webinar sessions, and system settings</p>
-        </motion.div>
-
-        {/* Stats Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
-        >
-          {stats.map((stat, index) => (
-            <div
-              key={index}
-              className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20"
-            >
-              <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center mb-4`}>
-                <BarChart3 className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-2xl font-bold text-white mb-1">{stat.value}</div>
-              <div className="text-gray-400 text-sm">{stat.label}</div>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Tab Navigation */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="flex flex-wrap gap-2 mb-8"
-        >
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-1 border border-white/20">
-            {[
-              { id: 'applications', label: 'Applications', icon: Users },
-              { id: 'webinars', label: 'Webinars', icon: Calendar },
-              { id: 'settings', label: 'Settings', icon: Settings }
-            ].map((tab) => {
-              const IconComponent = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center px-4 py-2 rounded-md font-medium transition-all duration-300 ${
-                    activeTab === tab.id
-                      ? 'bg-primary text-secondary hover:bg-primary-600'
-                      : 'text-secondary hover:text-primary'
-                  }`}
-                >
-                  <IconComponent className="w-4 h-4 mr-2" />
-                  {tab.label}
-                </button>
-              );
-            })}
+    <div className="min-h-screen bg-transparent pt-24 pb-12 px-4 sm:px-6 lg:px-8 text-secondary">
+      <div className="max-w-7xl mx-auto">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-display font-bold text-secondary">
+              Blog Management
+            </h1>
+            <p className="mt-1 text-sm text-gray-300">
+              Create, edit, and manage your technical articles.
+            </p>
           </div>
-        </motion.div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center px-4 py-2 text-gray-400 hover:text-red-500 hover:bg-red-50 font-bold rounded-xl transition-all"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5 mr-2" />
+              Logout
+            </button>
+            <button
+              onClick={() => handleOpenModal()}
+              className="inline-flex items-center px-6 py-3 bg-[#41c8df] hover:bg-[#38b2c7] text-black font-bold rounded-xl transition-all shadow-lg hover:shadow-[#41c8df]/20 active:scale-95"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              New Article
+            </button>
+          </div>
+        </div>
 
-        {/* Applications Tab */}
-        {activeTab === 'applications' && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            {/* Search and Filter */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Search applications..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-400"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-purple-400"
-                  >
-                    <option value="all" className="bg-gray-800">All Status</option>
-                    <option value="pending" className="bg-gray-800">Pending</option>
-                    <option value="approved" className="bg-gray-800">Approved</option>
-                    <option value="rejected" className="bg-gray-800">Rejected</option>
-                  </select>
-                  <button
-                    onClick={handleExportData}
-                    className="flex items-center px-4 py-3 bg-primary text-secondary hover:bg-primary-600 rounded-lg font-medium hover:from-purple-700 hover:to-cyan-700 transition-all duration-300"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export
-                  </button>
-                </div>
-              </div>
-            </div>
+        {/* Notifications */}
+        <AnimatePresence>
+          {success && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-green-50 border-l-4 border-green-400 p-4 mb-8 rounded-r-xl shadow-sm flex items-center gap-3"
+            >
+              <CheckCircle2 className="w-5 h-5 text-green-400" />
+              <p className="text-sm text-green-700 font-medium">{success}</p>
+            </motion.div>
+          )}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-red-50 border-l-4 border-red-400 p-4 mb-8 rounded-r-xl shadow-sm flex items-center gap-3"
+            >
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-            {/* Applications Table */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Applicant</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Course</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Type</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Applied</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {filteredApplications.map((app) => (
-                      <tr key={app.id} className="hover:bg-white/5 transition-colors">
-                        <td className="px-6 py-4">
+        {/* Search and Filters */}
+        <div className="bg-background/40 backdrop-blur-xl rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-secondary/10 p-4 mb-8">
+          <div className="relative border-secondary/10">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by title or category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-secondary/5 border border-transparent focus:bg-secondary/10 focus:border-[#41c8df] rounded-xl outline-none transition-all text-secondary placeholder:text-gray-500"
+            />
+          </div>
+        </div>
+
+        {/* Posts Table */}
+        <div className="bg-background/40 backdrop-blur-xl rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-secondary/10 overflow-hidden">
+          <div className="overflow-x-auto border-secondary/10">
+            <table className="w-full text-left">
+              <thead className="bg-secondary/5 border-b border-secondary/10">
+                <tr>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Article</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-8 h-8 border-4 border-gray-200 border-t-[#41c8df] rounded-full animate-spin" />
+                        <span className="text-sm font-medium">Loading articles...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredPosts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                      <div className="flex flex-col items-center gap-2">
+                        <FileText className="w-12 h-12 text-gray-100 mb-2" />
+                        <span className="text-sm font-medium">No articles found</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPosts.map((post) => (
+                    <tr key={post.id} className="hover:bg-secondary/5 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-secondary/10 rounded-lg overflow-hidden flex-shrink-0">
+                            {post.image ? (
+                              <img src={post.image} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                <ImageIcon size={20} />
+                              </div>
+                            )}
+                          </div>
                           <div>
-                            <div className="text-white font-medium">{app.name}</div>
-                            <div className="text-gray-400 text-sm">{app.email}</div>
-                            <div className="text-gray-400 text-sm">{app.phone}</div>
+                            <div className="text-sm font-bold text-secondary line-clamp-1">{post.title}</div>
+                            <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-medium">ID: {post.id}</div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-300">{app.course}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            app.type === 'student' 
-                              ? 'bg-blue-500/20 text-blue-300' 
-                              : 'bg-green-500/20 text-green-300'
-                          }`}>
-                            {app.type}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <select
-                            value={app.status}
-                            onChange={(e) => handleStatusChange(app.id, e.target.value)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium border-0 focus:outline-none ${
-                              app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
-                              app.status === 'approved' ? 'bg-green-500/20 text-green-300' :
-                              'bg-red-500/20 text-red-300'
-                            }`}
-                          >
-                            <option value="pending" className="bg-gray-800">Pending</option>
-                            <option value="approved" className="bg-gray-800">Approved</option>
-                            <option value="rejected" className="bg-gray-800">Rejected</option>
-                          </select>
-                        </td>
-                        <td className="px-6 py-4 text-gray-400 text-sm">
-                          {new Date(app.appliedAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex space-x-2">
-                            <button className="p-2 text-gray-400 hover:text-purple-300 transition-colors">
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 text-gray-400 hover:text-cyan-300 transition-colors">
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 text-gray-400 hover:text-red-300 transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Webinars Tab */}
-        {activeTab === 'webinars' && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            {/* Create Session Button */}
-            <div className="flex justify-end">
-              <button className="flex items-center px-6 py-3 bg-primary text-secondary hover:bg-primary-600 rounded-lg font-medium hover:from-purple-700 hover:to-cyan-700 transition-all duration-300">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Session
-              </button>
-            </div>
-
-            {/* Sessions List */}
-            <div className="space-y-4">
-              {webinarSessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20"
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-xl font-semibold text-white">{session.title}</h3>
-                        <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs font-medium">
-                          {session.status}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#41c8df]/10 border border-[#41c8df]/30 text-[#41c8df] uppercase">
+                          {post.category}
                         </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-400 mb-4">
-                        <div>
-                          <strong>Instructor:</strong> {session.instructor}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {post.isVisible ? (
+                            <span className="flex items-center text-xs font-bold text-green-600">
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-600 mr-2" />
+                              PUBLISHED
+                            </span>
+                          ) : (
+                            <span className="flex items-center text-xs font-bold text-gray-400">
+                              <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2" />
+                              HIDDEN
+                            </span>
+                          )}
                         </div>
-                        <div>
-                          <strong>Date:</strong> {new Date(session.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-400 font-medium">
+                        {post.date}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleToggleVisibility(post.id, post.isVisible)}
+                            className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                            title={post.isVisible ? "Hide Post" : "Show Post"}
+                          >
+                            {post.isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                          <button
+                            onClick={() => handleOpenModal(post)}
+                            className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                            title="Edit Post"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePost(post.id)}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
+                            title="Delete Post"
+                          >
+                            <Trash2 size={18} />
+                          </button>
                         </div>
-                        <div>
-                          <strong>Time:</strong> {session.time}
-                        </div>
-                        <div>
-                          <strong>Duration:</strong> {session.duration}
-                        </div>
-                      </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
-                      <div className="text-sm text-gray-400">
-                        <strong>Registered:</strong> {session.registeredEmails.length}/{session.maxParticipants} participants
+      {/* Editor Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 py-8 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="fixed inset-0 bg-background/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-background/90 backdrop-blur-2xl border border-secondary/20 w-full max-w-4xl rounded-[2.5rem] shadow-[0_0_50px_rgba(65,200,223,0.15)] relative z-10 overflow-hidden flex flex-col max-h-full"
+            >
+              {/* Modal Header */}
+              <div className="px-8 py-6 border-b border-secondary/10 flex items-center justify-between bg-secondary/5">
+                <div>
+                  <h2 className="text-2xl font-display font-bold text-secondary">
+                    {editingPost ? 'Edit Article' : 'New Article'}
+                  </h2>
+                  <p className="text-sm text-gray-400 uppercase tracking-widest font-bold mt-1">
+                    {editingPost ? 'Update existing content' : 'Create high-signal insights'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-3 text-gray-400 hover:text-secondary hover:bg-secondary/10 rounded-2xl transition-all border border-transparent hover:border-secondary/20"
+                  title="Close Modal"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left Column: Core Data */}
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
+                        Article Title
+                      </label>
+                      <div className="relative group">
+                        <Type className="absolute left-4 top-4 text-gray-500 group-focus-within:text-[#41c8df] transition-colors" size={18} />
+                        <input
+                          required
+                          type="text"
+                          value={formData.title}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          placeholder="e.g., The Future of Generative AI"
+                          className="w-full pl-12 pr-4 py-4 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-2xl outline-none transition-all text-secondary font-bold placeholder:text-gray-600"
+                        />
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
-                      <button className="px-4 py-2 text-gray-400 hover:text-purple-300 transition-colors">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button className="px-4 py-2 text-gray-400 hover:text-cyan-300 transition-colors">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button className="px-4 py-2 text-gray-400 hover:text-red-300 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
+                          Category
+                        </label>
+                        <div className="relative group">
+                          <Layout className="absolute left-4 top-4 text-gray-500 group-focus-within:text-[#41c8df] transition-colors" size={18} />
+                          <select
+                            value={formData.category}
+                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                            className="w-full pl-12 pr-4 py-4 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-2xl outline-none transition-all text-secondary font-bold appearance-none cursor-pointer [&>option]:bg-background [&>option]:text-secondary"
+                            title="Select Category"
+                          >
+                            <option value="AI Insights">AI Insights</option>
+                            <option value="Tutorials">Tutorials</option>
+                            <option value="Case Studies">Case Studies</option>
+                            <option value="Industry Trends">Industry Trends</option>
+                            <option value="Core Tech">Core Tech</option>
+                            <option value="Management">Management</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
+                          Initial Status
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, isVisible: !formData.isVisible })}
+                          className={`w-full py-4 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 border transition-all ${formData.isVisible
+                            ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                            : 'bg-secondary/5 border-secondary/10 text-gray-400'
+                            }`}
+                        >
+                          {formData.isVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+                          {formData.isVisible ? 'Visible' : 'Hidden'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
+                        Featured Image
+                      </label>
+                      <div className="space-y-4">
+                        {formData.image && (
+                          <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-gray-100 group">
+                            <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, image: '' })}
+                              className="absolute top-2 right-2 p-2 bg-background/50 hover:bg-background text-secondary rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                              title="Remove Image"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )}
+
+                        <label className={`flex flex-col items-center justify-center w-full ${formData.image ? 'h-24' : 'h-48'} border-2 border-dashed border-secondary/20 hover:border-[#41c8df] rounded-2xl cursor-pointer bg-secondary/5 hover:bg-[#41c8df]/10 transition-all group`}>
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <Upload className={`w-8 h-8 mb-3 text-gray-500 group-hover:text-[#41c8df] ${formData.image ? 'hidden' : 'block'}`} />
+                            <p className="text-sm text-gray-400 font-bold uppercase tracking-wider group-hover:text-[#41c8df]">
+                              {formData.image ? 'Change Image' : 'Click to upload image'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1 uppercase tracking-widest">
+                              SVG, PNG, JPG (MAX. 2MB)
+                            </p>
+                          </div>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Right Column: Content Body */}
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
+                      Article Content (Rich Text)
+                    </label>
+                    <textarea
+                      required
+                      value={formData.content}
+                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                      placeholder="Write your article insights here..."
+                      className="w-full h-[320px] p-6 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-[2rem] outline-none transition-all text-secondary leading-relaxed font-medium resize-none shadow-inner placeholder:text-gray-600"
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
-          </motion.div>
+
+                {/* Modal Footer */}
+                <div className="mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t border-gray-100">
+                  <div className="flex items-center text-xs text-gray-400 font-bold gap-4 uppercase tracking-[0.1em]">
+                    <div className="flex items-center gap-1.5 text-black">
+                      <CheckCircle2 size={14} className="text-[#41c8df]" /> Character Count: {formData.content.length}
+                    </div>
+                    <div>Ready to publish?</div>
+                  </div>
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="flex-1 sm:flex-none px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase tracking-widest text-xs transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={formLoading}
+                      className="flex-1 sm:flex-none inline-flex items-center justify-center px-10 py-4 bg-[#41c8df] hover:bg-secondary text-black font-black uppercase tracking-[0.2em] text-xs rounded-2xl transition-all shadow-[0_0_20px_rgba(65,200,223,0.3)] hover:shadow-[0_0_30px_rgba(65,200,223,0.5)] active:scale-95 disabled:opacity-50"
+                    >
+                      {formLoading ? (
+                        <div className="w-5 h-5 border-2 border-[#41c8df]/50 border-t-[#41c8df] rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4 mr-3" />
+                          {editingPost ? 'Update Article' : 'Publish Article'}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
+      </AnimatePresence>
 
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-              <h3 className="text-xl font-semibold text-white mb-6">System Settings</h3>
-              
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Site Title
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue="CynexAI"
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-purple-400"
-                  />
-                </div>
+      {/* Advanced Diagnostics Section */}
+      <div className="max-w-7xl mx-auto mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 mb-12 relative z-10">
+        <div className="bg-background/40 backdrop-blur-xl border border-secondary/10 p-6 rounded-[2rem] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-secondary flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#41c8df]" />
+              System Infrastructure
+            </h3>
+            <div className={`w-2.5 h-2.5 rounded-full ${isTursoConfigured ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}`} />
+          </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Contact Email
-                  </label>
-                  <input
-                    type="email"
-                    defaultValue="example@Cynexai.com"
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-purple-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Max Webinar Participants
-                  </label>
-                  <input
-                    type="number"
-                    defaultValue="50"
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-purple-400"
-                  />
-                </div>
-
-                <button className="bg-primary text-secondary hover:bg-primary-600 px-6 py-3 rounded-lg font-medium hover:from-purple-700 hover:to-cyan-700 transition-all duration-300">
-                  Save Settings
-                </button>
-              </div>
+          <div className="space-y-3 mb-6">
+            <div className="flex justify-between text-[10px] font-bold text-gray-500">
+              <span>Cloud Status</span>
+              <span className={isTursoConfigured ? 'text-green-600' : 'text-amber-600'}>
+                {isTursoConfigured ? 'Operational' : 'Fallback Active'}
+              </span>
             </div>
-          </motion.div>
-        )}
+            {diagResult && (
+              <>
+                <div className="flex justify-between text-[10px] font-bold text-gray-500 border-t border-secondary/10 pt-2">
+                  <span>Ping Latency</span>
+                  <span className="text-secondary">{diagResult.latency ?? 'N/A'}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-bold text-gray-500">
+                  <span>Active Tables</span>
+                  <span className="text-secondary">{diagResult.tables?.length ?? 0}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-bold text-gray-500">
+                  <span>Stored Articles</span>
+                  <span className="text-[#41c8df] font-black">{diagResult.counts?.blog_posts ?? 0}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2 mt-6">
+            <button
+              onClick={handleRunDiagnostics}
+              disabled={diagLoading}
+              className="px-4 py-2 bg-secondary/10 border border-secondary/20 text-secondary hover:border-secondary/50 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-secondary/20 transition-all disabled:opacity-50"
+            >
+              {diagLoading ? 'Testing...' : 'Test Connection'}
+            </button>
+            <button
+              onClick={handleResetLocal}
+              className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500/20 transition-all"
+            >
+              Reset Local
+            </button>
+            <button
+              onClick={handleGenerateAI}
+              disabled={diagLoading}
+              className="px-4 py-2 bg-purple-50 text-purple-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-purple-100 transition-all disabled:opacity-50"
+            >
+              Generate AI Content
+            </button>
+            <button
+              onClick={handlePopulateSample}
+              disabled={diagLoading}
+              className="px-4 py-2 bg-[#41c8df]/10 text-[#41c8df] text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-[#41c8df]/20 transition-all disabled:opacity-50"
+            >
+              Repair Data
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-background/40 backdrop-blur-xl border border-secondary/10 p-6 rounded-[2rem] shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col justify-center text-center">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] leading-relaxed">
+            Deepmind Protocol v1.3.0<br />
+            Protected Encryption: AES-256<br />
+            Secure Session Active
+          </p>
+        </div>
       </div>
     </div>
   );

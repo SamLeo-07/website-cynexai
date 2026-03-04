@@ -1,11 +1,21 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { courseData } from './CourseDetail'; // Import course data to get the name
+import { courseData } from './components/CourseDetail'; // Import course data to get the name
 
 const ApplicationForm = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
+
+  // State must always be declared unconditionally, before any early returns
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    message: ''
+  });
+  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
 
   // Find the course name from the imported data
   const course = courseId ? courseData[courseId as keyof typeof courseData] : null;
@@ -23,16 +33,6 @@ const ApplicationForm = () => {
       </div>
     );
   }
-
-  // State to hold form data and UI status
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    message: ''
-  });
-  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [message, setMessage] = useState('');
 
   // IMPORTANT: Replace this with the Web App URL from your Google Apps Script deployment
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxmluWiU1uciTJuYYrrwuNWjugFyzWDzvG4mTuGlNN6zu2DAf7JmSb8mQL7UrGxHeQfTw/exec';
@@ -53,7 +53,7 @@ const ApplicationForm = () => {
     setMessage('');
 
     try {
-      const response = await fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors', // IMPORTANT: This is required to bypass CORS restrictions for the Apps Script endpoint.
         headers: {
@@ -67,7 +67,7 @@ const ApplicationForm = () => {
       // In a production scenario with a custom backend, you would check `response.ok`.
       setSubmissionStatus('success');
       setMessage('Application submitted successfully! We will get in touch with you shortly.');
-      
+
       // Clear the form after a delay
       setTimeout(() => {
         setFormData({ name: '', email: '', phone: '', message: '' });
@@ -84,22 +84,22 @@ const ApplicationForm = () => {
 
   return (
     <div className="bg-background text-secondary min-h-screen font-sans flex items-center justify-center py-12 px-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="max-w-xl w-full bg-background-100 rounded-2xl shadow-xl p-8 md:p-12 border border-gray-800"
       >
         <div className="flex items-center mb-6">
-          <button onClick={() => navigate(-1)} className="text-primary hover:text-yellow-500 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+          <button onClick={() => navigate(-1)} className="text-primary hover:text-yellow-500 transition-colors" title="Go back" aria-label="Go back">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
           </button>
           <h1 className="text-3xl font-display font-bold text-center flex-grow">Apply for Course</h1>
         </div>
         <p className="text-center text-gray-400 mb-8">
           Fill out the form below to apply for: <span className="text-primary font-semibold">{courseName}</span>
         </p>
-        
+
         {submissionStatus === 'success' && (
           <div className="bg-green-900/50 text-green-300 p-4 rounded-lg mb-6 text-center">
             {message}
@@ -110,7 +110,7 @@ const ApplicationForm = () => {
             {message}
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-300">Full Name</label>

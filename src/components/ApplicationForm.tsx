@@ -50,7 +50,7 @@ const ApplicationForm = () => {
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw8QvbW81vI54G6BqfR_B8dhJ8YE3KfINn4ztIs1kikfsjE0YmWA7W58SgTaRVkdbifWQ/exec';
 
     try {
-      const response = await fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
@@ -77,20 +77,20 @@ const ApplicationForm = () => {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen pt-20 flex items-center justify-center bg-[#FFFFFF]">
+      <div className="min-h-screen pt-20 flex items-center justify-center bg-transparent">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="max-w-md mx-auto px-4"
         >
-          <div className="bg-[#FFFFFF] text-[#010203] rounded-2xl p-8 border border-[#41c8df]/20 text-center">
+          <div className="bg-background/40 backdrop-blur-xl text-secondary rounded-2xl p-8 border border-[#41c8df]/30 shadow-[0_0_30px_rgba(65,200,223,0.15)] text-center">
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
               className="w-16 h-16 bg-[#41c8df] rounded-full flex items-center justify-center mx-auto mb-6"
             >
-              <CheckCircle className="w-8 h-8 text-white" />
+              <CheckCircle className="w-8 h-8 text-secondary" />
             </motion.div>
             <h1 className="text-2xl font-bold mb-4">Thank You for Applying!</h1>
             <p className="text-[#010203]/80 mb-6">
@@ -127,24 +127,24 @@ const ApplicationForm = () => {
   }
 
   return (
-    <div className="min-h-screen pt-20 bg-[#FFFFFF]">
+    <div className="min-h-screen pt-20 bg-transparent">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Link
             to={`/course/${courseId}`}
-            className="inline-flex items-center text-[#41c8df] hover:text-[#a3852c] transition-colors mb-6"
+            className="inline-flex items-center text-[#41c8df] hover:text-secondary transition-colors mb-6"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Course
           </Link>
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-[#010203] mb-4">
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-secondary mb-4">
             Apply for <span className="text-[#41c8df]">{courseName}</span>
           </h1>
-          <p className="text-[#010203]/80 text-lg">
+          <p className="text-gray-300 text-lg">
             Take the first step towards transforming your career. Fill out the form below and our team will get in touch with you.
           </p>
         </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-[#FFFFFF] text-[#010203] rounded-2xl p-8 border border-[#41c8df]/20">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-background/40 backdrop-blur-xl text-secondary rounded-2xl p-8 border border-[#41c8df]/30 shadow-[0_0_40px_rgba(65,200,223,0.1)]">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-[#010203] mb-2">
@@ -156,7 +156,7 @@ const ApplicationForm = () => {
                 value={formData.name}
                 onChange={handleInputChange}
                 required
-                className="w-full px-4 py-3 bg-[#F5F5F5] border border-[#41c8df]/20 rounded-lg text-[#010203] placeholder-[#010203]/50 focus:outline-none focus:ring-2 focus:ring-[#41c8df]/20 transition-colors duration-300"
+                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 rounded-lg text-secondary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#41c8df]/50 transition-colors duration-300"
                 placeholder="Enter your full name"
               />
             </div>
@@ -170,7 +170,7 @@ const ApplicationForm = () => {
                 value={formData.email}
                 onChange={handleInputChange}
                 required
-                className="w-full px-4 py-3 bg-[#F5F5F5] border border-[#41c8df]/20 rounded-lg text-[#010203] placeholder-[#010203]/50 focus:outline-none focus:ring-2 focus:ring-[#41c8df]/20 transition-colors duration-300"
+                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 rounded-lg text-secondary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#41c8df]/50 transition-colors duration-300"
                 placeholder="Enter your email address"
               />
             </div>
@@ -184,7 +184,7 @@ const ApplicationForm = () => {
                 value={formData.phone}
                 onChange={handleInputChange}
                 required
-                className="w-full px-4 py-3 bg-[#F5F5F5] border border-[#41c8df]/20 rounded-lg text-[#010203] placeholder-[#010203]/50 focus:outline-none focus:ring-2 focus:ring-[#41c8df]/20 transition-colors duration-300"
+                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 rounded-lg text-secondary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#41c8df]/50 transition-colors duration-300"
                 placeholder="Enter your phone number"
               />
             </div>
@@ -194,19 +194,20 @@ const ApplicationForm = () => {
               </label>
               <select
                 name="type"
+                title="Current Status"
                 value={formData.type}
                 onChange={handleInputChange}
                 required
-                className="w-full px-4 py-3 bg-[#F5F5F5] border border-[#41c8df]/20 rounded-lg text-[#010203] focus:outline-none focus:ring-2 focus:ring-[#41c8df]/20 transition-colors duration-300"
+                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 rounded-lg text-secondary focus:outline-none focus:ring-2 focus:ring-[#41c8df]/50 transition-colors duration-300"
               >
-                <option value="student" className="bg-[#FFFFFF]">Student</option>
-                <option value="employed" className="bg-[#FFFFFF]">Employed</option>
+                <option value="student" className="bg-gray-900">Student</option>
+                <option value="employed" className="bg-gray-900">Employed</option>
               </select>
             </div>
-            <div className="bg-[#41c8df]/10 border border-[#41c8df]/20 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-[#010203] mb-2">Course Details</h3>
-              <p className="text-[#010203] font-medium">{courseName}</p>
-              <p className="text-[#010203]/70 text-sm mt-1">
+            <div className="bg-[#41c8df]/10 border border-[#41c8df]/30 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-secondary mb-2">Course Details</h3>
+              <p className="text-[#41c8df] font-medium">{courseName}</p>
+              <p className="text-gray-300 text-sm mt-1">
                 You are applying for this course. Our team will provide you with detailed information about the curriculum, schedule, and fees.
               </p>
             </div>
@@ -215,11 +216,10 @@ const ApplicationForm = () => {
               disabled={isLoading}
               whileHover={{ scale: isLoading || error ? 1 : 1.02 }}
               whileTap={{ scale: isLoading || error ? 1 : 0.98 }}
-              className={`w-full py-4 px-6 rounded-lg font-semibold transition-colors duration-300 ${
-                isLoading
-                  ? 'bg-[#CCCCCC] cursor-not-allowed'
-                  : 'bg-[#41c8df] text-[#010203] hover:bg-[#c09a2f]'
-              }`}
+              className={`w-full py-4 px-6 rounded-lg font-semibold transition-colors duration-300 ${isLoading
+                ? 'bg-[#CCCCCC] cursor-not-allowed'
+                : 'bg-[#41c8df] text-[#010203] hover:bg-[#c09a2f]'
+                }`}
             >
               {isLoading ? (
                 <div className="flex items-center justify-center">
@@ -237,9 +237,9 @@ const ApplicationForm = () => {
               </div>
             )}
           </form>
-          <div className="mt-8 p-4 bg-[#F5F5F5] rounded-lg border border-[#41c8df]/20">
-            <h4 className="text-[#010203] font-medium mb-2">What happens next?</h4>
-            <ul className="text-[#010203]/70 text-sm space-y-1">
+          <div className="mt-8 p-4 bg-secondary/5 rounded-lg border border-secondary/10">
+            <h4 className="text-secondary font-medium mb-2">What happens next?</h4>
+            <ul className="text-gray-400 text-sm space-y-1">
               <li>• Our team will review your application within 24-48 hours</li>
               <li>• You'll receive a call to discuss the course details and your goals</li>
               <li>• We'll provide information about batch schedules and payment options</li>

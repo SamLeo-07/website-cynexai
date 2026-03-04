@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
 import { Phone, Mail, Globe, MapPin, Clock, Users } from 'lucide-react';
+import './Contact.css';
+
+// ─── Floating Particle Orb ────────────────────────────────────────────────────
+const ParticleOrb = ({ className }: { className?: string }) => (
+  <div
+    className={`absolute rounded-full pointer-events-none contact-particle-orb${className ? ` ${className}` : ''}`}
+  />
+);
 
 const Contact = () => {
-  // useInView hook to trigger animations when the component scrolls into view
   const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.1 });
 
-  // --- State for the form inputs and submission status ---
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -16,14 +22,11 @@ const Contact = () => {
     message: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState(null); // null, 'success', 'error'
+  const [submitStatus, setSubmitStatus] = useState<'success' | 'error' | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
 
-  // --- Configuration ---
-  // IMPORTANT: Replace this with the URL for your Google Apps Script.
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwx3j2nwzJWA1_OpjGPwTRGMvJA8aboye9V9YPuMHnBflsVyAmKHCaa9benkaQ7KcUZuQ/exec';
 
-  // Define the contact information
   const contactInfo = [
     { icon: Phone, label: 'Phone', value: '+91 9966639869', href: 'tel:+919966639869' },
     { icon: Mail, label: 'Email', value: 'contact@Cynexai.in', href: 'mailto:contact@Cynexai.in' },
@@ -31,14 +34,12 @@ const Contact = () => {
     { icon: MapPin, label: 'Location', value: 'KPHB Phase I, Kukatpally, Hyderabad', href: 'https://maps.app.goo.gl/cMq38RHfxHpgEDKn9' },
   ];
 
-  // Define the stats
   const stats = [
     { icon: Users, value: '100+', label: 'Students Trained' },
     { icon: Clock, value: '24/7', label: 'Support Available' },
     { icon: Globe, value: '10+', label: 'Cities Reached' },
   ];
 
-  // Define the courses for the dropdown
   const courses = [
     'Data Science with AI',
     'Artificial Intelligence & Generative AI',
@@ -49,24 +50,37 @@ const Contact = () => {
     'SAP(FICO, MM, SD, ABAP)'
   ];
 
-  // Variants for framer-motion animations
-  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.2 } } };
-  const itemVariants = { hidden: { y: 50, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { duration: 0.6, ease: 'easeOut' } } };
+  const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+  };
 
-  // Handle input changes
-  const handleChange = (e) => {
+  const itemVariants: Variants = {
+    hidden: { y: 50, opacity: 0, rotateX: 15 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      rotateX: 0,
+      transition: { duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }
+    }
+  };
+
+  const formFieldVariants: Variants = {
+    hidden: { x: -30, opacity: 0, rotateY: -8 },
+    visible: { x: 0, opacity: 1, rotateY: 0, transition: { duration: 0.6, ease: 'easeOut' } },
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prevData => ({ ...prevData, [name]: value }));
   };
 
-  // Handle form submission
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     setSubmitStatus(null);
     setStatusMessage('');
 
-    // Prepare data to send
     const dataToSend = new FormData();
     dataToSend.append('fullName', formData.fullName);
     dataToSend.append('email', formData.email);
@@ -75,7 +89,6 @@ const Contact = () => {
     dataToSend.append('message', formData.message);
     dataToSend.append('sheetName', 'Messages');
 
-    // Basic validation
     if (!formData.fullName || !formData.email || !formData.message) {
       setSubmitStatus('error');
       setStatusMessage('Please fill out all required fields.');
@@ -84,23 +97,11 @@ const Contact = () => {
     }
 
     try {
-      const response = await fetch(SCRIPT_URL, {
-        method: 'POST',
-        body: dataToSend,
-        // No 'Content-Type' header needed for FormData
-      });
-
+      const response = await fetch(SCRIPT_URL, { method: 'POST', body: dataToSend });
       if (response.ok) {
         setSubmitStatus('success');
         setStatusMessage('Your message has been sent successfully!');
-        // Reset form data after successful submission
-        setFormData({
-          fullName: '',
-          email: '',
-          phone: '',
-          courseInterest: 'Select a course',
-          message: '',
-        });
+        setFormData({ fullName: '', email: '', phone: '', courseInterest: 'Select a course', message: '' });
       } else {
         setSubmitStatus('error');
         setStatusMessage('Failed to send message. Please try again later.');
@@ -115,37 +116,47 @@ const Contact = () => {
   };
 
   return (
-    <section id="contact" className="py-20 relative bg-white text-gray-900">
-      {/* Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 -left-20 w-40 h-40 bg-[#41c8df]/10 rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute bottom-1/4 -right-20 w-60 h-60 bg-[#41c8df]/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '2s' }} />
-      </div>
+    <section id="contact" className="py-20 relative bg-transparent text-secondary overflow-hidden relative z-10">
+
+      {/* Floating 3D Particle Orbs */}
+      <ParticleOrb className="contact-orb-1" />
+      <ParticleOrb className="contact-orb-2" />
+      <ParticleOrb className="contact-orb-3" />
+      <ParticleOrb className="contact-orb-4" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        {/* Header with 3D entrance */}
         <motion.div
           ref={ref}
           variants={containerVariants}
           initial="hidden"
           animate={inView ? 'visible' : 'hidden'}
-          className="text-center mb-16"
+          className="text-center mb-16 contact-perspective"
         >
-          <motion.h2 variants={itemVariants} className="text-4xl md:text-5xl font-display font-bold mb-4">
+          <motion.h2
+            variants={itemVariants}
+            className="text-4xl md:text-5xl font-display font-bold mb-4 text-secondary"
+          >
             Get In Touch
           </motion.h2>
-          <motion.p variants={itemVariants} className="text-lg text-gray-700">
+          <motion.p variants={itemVariants} className="text-lg text-gray-300">
             Ready to transform your career? Contact us today and take the first step towards your tech journey.
           </motion.p>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Contact Information & Stats */}
-          <motion.div variants={containerVariants} initial="hidden" animate={inView ? 'visible' : 'hidden'} className="space-y-12">
+          {/* Contact Information */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate={inView ? 'visible' : 'hidden'}
+            className="space-y-12 contact-perspective"
+          >
             <div>
-              <motion.h3 variants={itemVariants} className="text-2xl font-semibold mb-6">
+              <motion.h3 variants={itemVariants} className="text-2xl font-semibold mb-6 text-secondary">
                 Contact Information
               </motion.h3>
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {contactInfo.map((item, i) => {
                   const Icon = item.icon;
                   return (
@@ -154,15 +165,17 @@ const Contact = () => {
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      whileHover={{ x: 10 }}
-                      className="flex items-center space-x-4 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-[#41c8df] transition-colors duration-300"
+                      variants={itemVariants}
+                      whileHover={{ x: 10, rotateY: 2, scale: 1.02 }}
+                      className="flex items-center space-x-4 p-4 bg-gray-900/40 rounded-xl border border-secondary/10 hover:border-[#41c8df] hover:shadow-[0_0_20px_rgba(65,200,223,0.2)] transition-all duration-300 contact-preserve-3d"
                     >
-                      <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-[#41c8df] text-white">
-                        <Icon className="w-6 h-6" />
+                      <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-gradient-to-r from-[#41c8df] to-blue-500 text-secondary flex-shrink-0 contact-icon-3d shadow-md"
+                      >
+                        <Icon className="w-6 h-6 drop-shadow-sm" />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">{item.label}</p>
-                        <p className="font-medium text-gray-900">{item.value}</p>
+                        <p className="text-sm text-gray-400 font-medium">{item.label}</p>
+                        <p className="font-bold text-gray-100">{item.value}</p>
                       </div>
                     </motion.a>
                   );
@@ -171,21 +184,22 @@ const Contact = () => {
             </div>
 
             <div>
-              <motion.h3 variants={itemVariants} className="text-2xl font-semibold mb-6">
+              <motion.h3 variants={itemVariants} className="text-2xl font-semibold mb-6 text-secondary">
                 Why Choose Us
               </motion.h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {stats.map((stat, i) => {
                   const Icon = stat.icon;
                   return (
                     <motion.div
                       key={i}
                       variants={itemVariants}
-                      className="p-6 bg-gray-50 rounded-lg border border-gray-200 text-center hover:border-[#41c8df] transition-colors duration-300"
+                      whileHover={{ y: -8, rotateX: -5, scale: 1.05 }}
+                      className="p-6 bg-gray-900/60 backdrop-blur-xl rounded-xl border border-secondary/10 text-center hover:border-[#41c8df]/60 hover:shadow-[0_10px_30px_rgba(65,200,223,0.2)] transition-all duration-300 cursor-default contact-stat-card shadow-sm"
                     >
-                      <Icon className="w-8 h-8 text-[#41c8df] mx-auto mb-3" />
-                      <div className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</div>
-                      <div className="text-sm text-gray-600">{stat.label}</div>
+                      <Icon className="w-8 h-8 text-[#41c8df] mx-auto mb-3 drop-shadow-[0_0_8px_rgba(65,200,223,0.4)]" />
+                      <div className="text-2xl font-extrabold text-secondary mb-1">{stat.value}</div>
+                      <div className="text-sm text-gray-400 font-medium">{stat.label}</div>
                     </motion.div>
                   );
                 })}
@@ -193,94 +207,88 @@ const Contact = () => {
             </div>
           </motion.div>
 
-          {/* Contact Form */}
-          <motion.div variants={itemVariants} initial="hidden" animate={inView ? 'visible' : 'hidden'} className="bg-gray-50 rounded-2xl p-8 border border-gray-200">
-            <h3 className="text-2xl font-semibold text-gray-900 mb-6">Send us a Message</h3>
-            <form className="space-y-6" onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label htmlFor="fullName" className="block text-sm text-gray-700 mb-2">Full Name</label>
+          {/* Contact Form with 3D entrance */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate={inView ? 'visible' : 'hidden'}
+            className="bg-background/40 backdrop-blur-xl rounded-2xl p-8 lg:p-10 border border-secondary/10 hover:border-[#41c8df]/50 hover:shadow-[0_15px_40px_rgba(65,200,223,0.2)] transition-all duration-500 contact-perspective contact-preserve-3d shadow-lg"
+          >
+            <motion.h3 variants={itemVariants} className="text-2xl font-semibold text-secondary mb-6">
+              Send us a Message
+            </motion.h3>
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              {[
+                { label: 'Full Name', id: 'fullName', type: 'text', placeholder: 'John Doe', required: true },
+                { label: 'Email', id: 'email', type: 'email', placeholder: 'john@example.com', required: true },
+                { label: 'Phone', id: 'phone', type: 'tel', placeholder: '+91 9876543210', required: false },
+              ].map((field, i) => (
+                <motion.div key={field.id} variants={formFieldVariants} className={`contact-field-delay-${i}`}>
+                  <label htmlFor={field.id} className="block text-sm text-gray-400 mb-2">{field.label}</label>
                   <input
-                    type="text"
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
+                    type={field.type}
+                    id={field.id}
+                    name={field.id}
+                    value={formData[field.id as keyof typeof formData]}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#41c8df]"
-                    placeholder="John Doe"
-                    required
+                    className="w-full px-4 py-3.5 border border-secondary/10 rounded-xl bg-secondary/5 backdrop-blur-md text-secondary focus:ring-2 focus:ring-[#41c8df] focus:border-transparent outline-none transition-all duration-300 hover:border-[#41c8df]/50 shadow-inner"
+                    placeholder={field.placeholder}
+                    required={field.required}
                   />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="email" className="block text-sm text-gray-700 mb-2">Email</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#41c8df]"
-                  placeholder="john@example.com"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="phone" className="block text-sm text-gray-700 mb-2">Phone</label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#41c8df]"
-                  placeholder="+91 9876543210"
-                />
-              </div>
-              <div>
-                <label htmlFor="courseInterest" className="block text-sm text-gray-700 mb-2">Course Interest</label>
+                </motion.div>
+              ))}
+
+              <motion.div variants={formFieldVariants}>
+                <label htmlFor="courseInterest" className="block text-sm text-gray-400 mb-2">Course Interest</label>
                 <select
                   id="courseInterest"
                   name="courseInterest"
                   value={formData.courseInterest}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#41c8df]"
+                  className="w-full px-4 py-3.5 border border-secondary/10 rounded-xl bg-secondary/5 backdrop-blur-md text-secondary focus:ring-2 focus:ring-[#41c8df] outline-none transition-all duration-300 hover:border-[#41c8df]/50 shadow-inner [&>option]:bg-gray-900"
                 >
                   {courses.map((course, index) => (
-                    <option key={index} value={course}>
-                      {course}
-                    </option>
+                    <option key={index} value={course}>{course}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label htmlFor="message" className="block text-sm text-gray-700 mb-2">Message</label>
+              </motion.div>
+
+              <motion.div variants={formFieldVariants}>
+                <label htmlFor="message" className="block text-sm text-gray-400 mb-2">Message</label>
                 <textarea
                   id="message"
                   name="message"
                   rows={4}
                   value={formData.message}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#41c8df]"
+                  className="w-full px-4 py-3.5 border border-secondary/10 rounded-xl bg-secondary/5 backdrop-blur-md text-secondary focus:ring-2 focus:ring-[#41c8df] outline-none transition-all duration-300 hover:border-[#41c8df]/50 resize-none shadow-inner"
                   placeholder="Your message..."
                   required
                 />
-              </div>
-              <button
+              </motion.div>
+
+              <motion.button
                 type="submit"
                 disabled={isSubmitting}
-                className={`w-full py-3 text-white rounded-lg transition-colors duration-300 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#41c8df] hover:bg-[#c09a2f]'}`}
+                whileHover={!isSubmitting ? { scale: 1.03, rotateX: -3, y: -2 } : {}}
+                whileTap={!isSubmitting ? { scale: 0.97, rotateX: 3, y: 2 } : {}}
+                className={`w-full py-3 text-secondary font-semibold rounded-lg transition-all duration-300 contact-submit-btn ${isSubmitting
+                  ? 'bg-gray-600/50 text-secondary/50 cursor-not-allowed'
+                  : 'bg-[#41c8df] text-black hover:bg-blue-600 hover:text-secondary hover:shadow-[0_4px_20px_rgba(65,200,223,0.4)]'
+                  }`}
               >
                 {isSubmitting ? 'Sending...' : 'Send Message'}
-              </button>
+              </motion.button>
             </form>
+
             <AnimatePresence>
               {submitStatus && (
                 <motion.div
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: -20, rotateX: -10 }}
+                  animate={{ opacity: 1, y: 0, rotateX: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className={`mt-4 p-4 rounded-lg text-center ${submitStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
+                  className={`mt-4 p-4 rounded-lg text-center ${submitStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}
                 >
                   {statusMessage}
                 </motion.div>

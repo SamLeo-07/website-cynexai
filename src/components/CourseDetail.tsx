@@ -1,11 +1,10 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion, useViewportScroll, useTransform, easeOut } from 'framer-motion'; // Ensure easeOut is imported
+import { motion, easeOut, AnimatePresence } from 'framer-motion'; // Ensure easeOut is imported
 import { useInView } from 'react-intersection-observer';
 import {
   ArrowLeft,
   Clock,
-  Users, // Used for students count
   Briefcase, // Used for Placement
   Star,
   CheckCircle, // Used for Outcomes/Prerequisites list items
@@ -14,15 +13,15 @@ import {
   Award, // Used for Skills You'll Gain heading
   BookOpen, // Used for Course Modules list items
   Target, // Used for Learning Outcomes heading
-  GraduationCap, // Used for Level
-  Code // Used for Skills
+  X
 } from 'lucide-react';
 
 // ====================================================================
 // This `courseData` object must be OUTSIDE the functional component.
 // Its IDs (keys) must match the `id`s used in Courses.tsx.
 // ====================================================================
-const courseData = {
+// eslint-disable-next-line react-refresh/only-export-components
+export const courseData = {
   'data-science-machine-learning': {
     title: 'Data Science & Machine Learning',
     subtitle: 'Unlock Insights from Data & Build Predictive Models',
@@ -64,7 +63,7 @@ const courseData = {
       'AI/ML Engineer',
       'Data Analyst',
       'Business Intelligence Developer'
-    ] 
+    ]
   },
   'artificial-intelligence-generative-ai': {
     title: 'Artificial Intelligence & Generative AI',
@@ -329,21 +328,33 @@ const courseData = {
 const CourseDetail = () => {
   const { courseId } = useParams(); // Correctly get the ID from the URL parameter
   const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.1 }); // Initialize useInView
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [currentOfferImage, setCurrentOfferImage] = useState(0);
+  const offerImages = ['/offer-laptop.png', '/offer-laptop-2.png', '/offer-laptop-3.png'];
+
+  useEffect(() => {
+    if (showOfferModal) {
+      const timer = setInterval(() => {
+        setCurrentOfferImage((prev) => (prev + 1) % offerImages.length);
+      }, 3000);
+      return () => clearInterval(timer);
+    }
+  }, [showOfferModal, offerImages.length]);
 
   const course = courseData[courseId as keyof typeof courseData];
 
   if (!course) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center py-20 px-4 sm:px-6 lg:px-8 text-black">
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center py-20 px-4 sm:px-6 lg:px-8 text-secondary">
         <motion.div
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="text-center"
         >
-          <h2 className="text-4xl font-display font-bold text-primary mb-4">Course Not Found</h2>
-          <p className="text-lg text-gray-700">The course you are looking for does not exist or has been removed.</p>
-          <Link to="/" className="mt-8 inline-block bg-primary text-white py-3 px-6 rounded-lg font-medium hover:bg-primary-600 transition-colors duration-300">
+          <h2 className="text-4xl font-display font-bold text-[#41c8df] mb-4">Course Not Found</h2>
+          <p className="text-lg text-gray-300">The course you are looking for does not exist or has been removed.</p>
+          <Link to="/" className="mt-8 inline-block bg-[#41c8df] text-black py-3 px-6 rounded-lg font-medium hover:bg-secondary transition-colors duration-300">
             Go Back Home
           </Link>
         </motion.div>
@@ -375,7 +386,7 @@ const CourseDetail = () => {
   };
 
   return (
-    <div className="min-h-screen pt-20 bg-white text-black"> {/* Overall background and default text color */}
+    <div className="min-h-screen pt-20 bg-transparent text-secondary"> {/* Overall background and default text color */}
       {/* Hero Section */}
       <section className="relative py-20 overflow-hidden">
         <div className="absolute inset-0">
@@ -384,7 +395,7 @@ const CourseDetail = () => {
             alt={course.title}
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-black/80"></div> {/* Solid black overlay */}
+          <div className="absolute inset-0 bg-background/80"></div> {/* Solid black overlay */}
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -397,7 +408,7 @@ const CourseDetail = () => {
             <motion.div variants={itemVariants} className="mb-6">
               <Link
                 to="/"
-                className="inline-flex items-center text-[#41c8df] hover:text-yellow-600 transition-colors" // Gold link
+                className="inline-flex items-center text-[#41c8df] hover:text-secondary transition-colors" // Gold link
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Courses
@@ -409,9 +420,9 @@ const CourseDetail = () => {
                 <motion.div variants={itemVariants} className="mb-4">
                   <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium border
                     ${course.level === 'Beginner' ? 'bg-[#41c8df]/20 text-[#41c8df] border-[#41c8df]/30' : // Gold for Beginner
-                    course.level === 'Intermediate' ? 'bg-[#41c8df]/20 text-[#41c8df] border-[#41c8df]/30' : // Gold for Intermediate
-                    course.level === 'Advanced' ? 'bg-[#41c8df]/20 text-[#41c8df] border-[#41c8df]/30' : // Gold for Advanced
-                    'bg-[#41c8df]/20 text-[#41c8df] border-[#41c8df]/30' // Default to gold
+                      course.level === 'Intermediate' ? 'bg-[#41c8df]/20 text-[#41c8df] border-[#41c8df]/30' : // Gold for Intermediate
+                        course.level === 'Advanced' ? 'bg-[#41c8df]/20 text-[#41c8df] border-[#41c8df]/30' : // Gold for Advanced
+                          'bg-[#41c8df]/20 text-[#41c8df] border-[#41c8df]/30' // Default to gold
                     }`}>
                     {course.level}
                   </span>
@@ -419,7 +430,7 @@ const CourseDetail = () => {
 
                 <motion.h1
                   variants={itemVariants}
-                  className="text-4xl md:text-5xl font-display font-bold text-white mb-4" // Main title remains white for contrast
+                  className="text-4xl md:text-5xl font-display font-bold text-secondary mb-4" // Main title remains white for contrast
                 >
                   {course.title}
                 </motion.h1>
@@ -457,13 +468,13 @@ const CourseDetail = () => {
                 </motion.div>
 
                 <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4">
-                  <Link
-                    to={`/apply/${courseId}`}// Changed link from /apply/${courseId} to /apply (generic)
-                    className="bg-[#41c8df] text-black hover:bg-yellow-600 px-8 py-4 rounded-lg font-semibold text-center transition-all duration-300" // Gold background, black text
+                  <button
+                    onClick={() => setShowOfferModal(true)}
+                    className="bg-[#41c8df] text-black hover:bg-secondary px-8 py-4 rounded-lg font-semibold text-center transition-all duration-300 shadow-[0_0_20px_rgba(65,200,223,0.3)] hover:shadow-[0_0_30px_rgba(65,200,223,0.5)]" // Gold background, black text
                   >
                     Enroll Now
-                  </Link>
-                  <button className="border-2 border-[#41c8df] text-[#41c8df] px-8 py-4 rounded-lg font-semibold hover:bg-[#41c8df]/10 transition-all duration-300 flex items-center justify-center"> {/* Gold border, gold text */}
+                  </button>
+                  <button className="border border-[#41c8df]/50 text-[#41c8df] px-8 py-4 rounded-lg font-semibold hover:bg-secondary/5 transition-all duration-300 flex items-center justify-center"> {/* Gold border, gold text */}
                     <Play className="w-5 h-5 mr-2" />
                     Watch Preview
                   </button>
@@ -473,42 +484,42 @@ const CourseDetail = () => {
               {/* Course Info Card */}
               <motion.div
                 variants={itemVariants}
-                className="bg-black/50 backdrop-blur-sm rounded-2xl p-8 border border-white/20" // Darker card for contrast
-              > 
+                className="bg-background/60 backdrop-blur-xl rounded-2xl p-8 border border-secondary/20 shadow-[0_0_40px_rgba(65,200,223,0.15)]" // Darker card for contrast
+              >
                 <div className="text-center mb-6">
-                  <div className="text-3xl font-bold text-white mb-2">
+                  <div className="text-3xl font-bold text-secondary mb-2">
                     Start Your Journey Today!
                   </div>
                   <div className="text-gray-400 text-lg">
                     Invest in your future with our industry-leading program.
                   </div>
-                </div> 
+                </div>
 
                 <div className="space-y-4 mb-6">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-300">Duration</span>
-                    <span className="text-white font-medium">{course.duration}</span>
+                    <span className="text-secondary font-medium">{course.duration}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-300">Level</span>
-                    <span className="text-white font-medium">{course.level}</span>
+                    <span className="text-secondary font-medium">{course.level}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-300">Job/Internship Placement</span>
-                    <span className="text-white font-medium">{course.placement}</span>
+                    <span className="text-secondary font-medium">{course.placement}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-300">Certificate</span>
-                    <span className="text-white font-medium">Yes</span>
+                    <span className="text-secondary font-medium">Yes</span>
                   </div>
                 </div>
- 
-                <Link
-                  to={`/apply/${courseId}`} // Changed link from /apply/${courseId} to /apply (generic)
-                  className="w-full bg-[#41c8df] text-black hover:bg-yellow-600 py-4 px-6 rounded-lg font-semibold text-center block transition-all duration-300" // Gold background, black text
+
+                <button
+                  onClick={() => setShowOfferModal(true)}
+                  className="w-full bg-[#41c8df] text-black hover:bg-secondary py-4 px-6 rounded-lg font-semibold text-center block transition-all duration-300 shadow-[0_0_20px_rgba(65,200,223,0.3)] hover:shadow-[0_0_30px_rgba(65,200,223,0.5)]" // Gold background, black text
                 >
                   Enroll Now
-                </Link>
+                </button>
               </motion.div>
             </div>
           </motion.div>
@@ -516,7 +527,7 @@ const CourseDetail = () => {
       </section>
 
       {/* What You'll Learn Section */}
-      <section className="py-20 bg-white"> {/* Section background changed to white */}
+      <section className="py-20 bg-transparent"> {/* Section background changed to white */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             variants={containerVariants}
@@ -525,7 +536,7 @@ const CourseDetail = () => {
           >
             <motion.h2
               variants={itemVariants}
-              className="text-3xl md:text-4xl font-display font-bold text-center mb-16 text-black" // Heading text to black
+              className="text-3xl md:text-4xl font-display font-bold text-center mb-16 text-secondary" // Heading text to black
             >
               <span className="text-[#41c8df]"> {/* Highlighted text to gold */}
                 What You'll Learn
@@ -535,7 +546,7 @@ const CourseDetail = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
               {/* Learning Outcomes */}
               <motion.div variants={itemVariants}>
-                <h3 className="text-2xl font-semibold text-black mb-6 flex items-center"> {/* Heading text to black */}
+                <h3 className="text-2xl font-semibold text-secondary mb-6 flex items-center"> {/* Heading text to black */}
                   <Target className="w-6 h-6 mr-3 text-[#41c8df]" /> {/* Gold icon */}
                   Learning Outcomes
                 </h3>
@@ -543,7 +554,7 @@ const CourseDetail = () => {
                   {course.outcomes.map((outcome, index) => (
                     <div key={index} className="flex items-start">
                       <CheckCircle className="w-5 h-5 text-[#41c8df] mr-3 mt-1 flex-shrink-0" /> {/* Gold icon */}
-                      <span className="text-gray-800">{outcome}</span> {/* Text to darker gray */}
+                      <span className="text-gray-300">{outcome}</span> {/* Text to darker gray */}
                     </div>
                   ))}
                 </div>
@@ -551,7 +562,7 @@ const CourseDetail = () => {
 
               {/* Skills You'll Gain */}
               <motion.div variants={itemVariants}>
-                <h3 className="text-2xl font-semibold text-black mb-6 flex items-center"> {/* Heading text to black */}
+                <h3 className="text-2xl font-semibold text-secondary mb-6 flex items-center"> {/* Heading text to black */}
                   <Award className="w-6 h-6 mr-3 text-[#41c8df]" /> {/* Gold icon */}
                   Skills You'll Gain
                 </h3>
@@ -559,7 +570,7 @@ const CourseDetail = () => {
                   {course.skills.map((skill, index) => (
                     <span
                       key={index}
-                      className="px-4 py-2 bg-[#41c8df]/10 text-black rounded-lg border border-[#41c8df]/30 font-medium" // Gold tint background, gold border, black text
+                      className="px-4 py-2 bg-[#41c8df]/10 text-[#41c8df] rounded-lg border border-[#41c8df]/30 font-medium whitespace-nowrap" // Gold tint background, gold border, black text
                     >
                       {skill}
                     </span>
@@ -572,7 +583,7 @@ const CourseDetail = () => {
       </section>
 
       {/* Course Modules */}
-      <section className="py-20 bg-gray-100"> {/* Changed background to a light gray */}
+      <section className="py-20 bg-background/20 backdrop-blur-md border-y border-secondary/5 relative z-10"> {/* Changed background to a light gray */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             variants={containerVariants}
@@ -581,7 +592,7 @@ const CourseDetail = () => {
           >
             <motion.h2
               variants={itemVariants}
-              className="text-3xl md:text-4xl font-display font-bold text-center mb-16 text-black" // Heading text to black
+              className="text-3xl md:text-4xl font-display font-bold text-center mb-16 text-secondary" // Heading text to black
             >
               <span className="text-[#41c8df]"> {/* Highlighted text to gold */}
                 Course Curriculum
@@ -593,15 +604,15 @@ const CourseDetail = () => {
                 {course.modules.map((moduleItem, index) => ( // Renamed 'module' to 'moduleItem' to avoid conflict with JS keyword
                   <div
                     key={index}
-                    className="bg-white rounded-lg p-6 border border-gray-200 hover:border-[#41c8df]/50 transition-all duration-300" // White background, light gray border, gold hover
+                    className="bg-secondary/5 backdrop-blur-sm rounded-lg p-6 border border-secondary/10 hover:border-[#41c8df]/50 transition-all duration-300" // White background, light gray border, gold hover
                   >
                     <div className="flex items-center">
-                      <div className="flex items-center justify-center w-10 h-10 bg-[#41c8df] rounded-full text-white font-bold mr-4"> {/* Gold circle */}
+                      <div className="flex items-center justify-center w-10 h-10 bg-[#41c8df] rounded-full text-secondary font-bold mr-4"> {/* Gold circle */}
                         {index + 1}
                       </div>
                       <div className="flex-1">
-                        <h4 className="text-lg font-semibold text-black mb-1">{moduleItem}</h4> {/* Black text */}
-                        <p className="text-gray-600 text-sm">Module {index + 1}</p> {/* Darker gray text */}
+                        <h4 className="text-lg font-semibold text-secondary mb-1">{moduleItem}</h4> {/* Black text */}
+                        <p className="text-gray-400 text-sm">Module {index + 1}</p> {/* Darker gray text */}
                       </div>
                       <BookOpen className="w-5 h-5 text-[#41c8df]" /> {/* Gold icon */}
                     </div>
@@ -614,7 +625,7 @@ const CourseDetail = () => {
       </section>
 
       {/* Prerequisites & Career Paths */}
-      <section className="py-20 bg-white"> {/* Section background changed to white */}
+      <section className="py-20 bg-transparent text-secondary relative z-10"> {/* Section background changed to white */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Prerequisites */}
@@ -622,14 +633,14 @@ const CourseDetail = () => {
               variants={itemVariants}
               initial="hidden"
               animate={inView ? "visible" : "hidden"}
-              className="bg-gray-50 rounded-2xl p-8 border border-gray-200" // Light gray background, light gray border
+              className="bg-secondary/5 backdrop-blur-sm rounded-2xl p-8 border border-secondary/10 shadow-[0_0_30px_rgba(0,0,0,0.3)]" // Light gray background, light gray border
             >
-              <h3 className="text-2xl font-semibold text-black mb-6">Prerequisites</h3> {/* Black text */}
+              <h3 className="text-2xl font-semibold text-secondary mb-6">Prerequisites</h3> {/* Black text */}
               <div className="space-y-4">
                 {course.prerequisites.map((prereq, index) => (
                   <div key={index} className="flex items-start">
                     <CheckCircle className="w-5 h-5 text-[#41c8df] mr-3 mt-1 flex-shrink-0" /> {/* Gold icon */}
-                    <span className="text-gray-800">{prereq}</span> {/* Darker gray text */}
+                    <span className="text-gray-300">{prereq}</span> {/* Darker gray text */}
                   </div>
                 ))}
               </div>
@@ -640,16 +651,16 @@ const CourseDetail = () => {
               variants={itemVariants}
               initial="hidden"
               animate={inView ? "visible" : "hidden"}
-              className="bg-gray-50 rounded-2xl p-8 border border-gray-200" // Light gray background, light gray border
+              className="bg-secondary/5 backdrop-blur-sm rounded-2xl p-8 border border-secondary/10 shadow-[0_0_30px_rgba(0,0,0,0.3)]" // Light gray background, light gray border
             >
-              <h3 className="text-2xl font-semibold text-black mb-6">Potential Career Paths:</h3> {/* Black text */}
+              <h3 className="text-2xl font-semibold text-secondary mb-6">Potential Career Paths:</h3> {/* Black text */}
               <div className="space-y-3">
                 {course.career.map((role, index) => (
                   <div
                     key={index}
                     className="px-4 py-3 bg-[#41c8df]/10 rounded-lg border border-[#41c8df]/20" // Gold tint background, gold border
                   >
-                    <span className="text-black font-medium">{role}</span> {/* Black text */}
+                    <span className="text-secondary font-medium">{role}</span> {/* Black text */}
                   </div>
                 ))}
               </div>
@@ -659,7 +670,7 @@ const CourseDetail = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-black via-gray-900 to-black"> {/* Dark gradient */}
+      <section className="py-20 bg-background/40 backdrop-blur-xl border-t border-secondary/10 relative z-10"> {/* Dark gradient */}
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
             variants={containerVariants}
@@ -668,7 +679,7 @@ const CourseDetail = () => {
           >
             <motion.h2
               variants={itemVariants}
-              className="text-3xl md:text-4xl font-display font-bold text-white mb-6" // Title remains white
+              className="text-3xl md:text-4xl font-display font-bold text-secondary mb-6" // Title remains white
             >
               Ready to Transform Your Career?
             </motion.h2>
@@ -679,27 +690,105 @@ const CourseDetail = () => {
               Join thousands of successful graduates and take the first step towards your dream tech career.
             </motion.p>
             <motion.div
-                variants={itemVariants}
-                className="flex flex-col sm:flex-row gap-4 justify-center"
+              variants={itemVariants}
+              className="flex flex-col sm:flex-row gap-4 justify-center"
+            >
+              <button
+                onClick={() => setShowOfferModal(true)}
+                className="bg-[#41c8df] text-black hover:bg-secondary px-8 py-4 rounded-lg font-semibold transition-all duration-300 shadow-[0_0_20px_rgba(65,200,223,0.3)] hover:shadow-[0_0_30px_rgba(65,200,223,0.5)]"
               >
-                <Link
-                  to={`/apply/${courseId}`} // Existing Enroll Now link
-                  className="bg-[#41c8df] text-black hover:bg-yellow-600 px-8 py-4 rounded-lg font-semibold transition-all duration-300"
-                >
-                  Enroll Now
-                </Link>
-                {/* UPDATED BROCHURE LINK */}
-                <Link
-                  to="/brochure" // <<<--- THIS IS THE NEW INTERNAL ROUTE
-                  className="border-2 border-[#41c8df] text-[#41c8df] px-8 py-4 rounded-lg font-semibold hover:bg-[#41c8df]/10 transition-all duration-300 flex items-center justify-center"
-                >
-                  <Download className="w-5 h-5 mr-2" />
-                  View Brochure
-                </Link>
-              </motion.div>
+                Enroll Now
+              </button>
+              {/* UPDATED BROCHURE LINK */}
+              <Link
+                to="/brochure" // <<<--- THIS IS THE NEW INTERNAL ROUTE
+                className="border border-[#41c8df]/50 text-[#41c8df] px-8 py-4 rounded-lg font-semibold hover:bg-secondary/5 transition-all duration-300 flex items-center justify-center"
+              >
+                <Download className="w-5 h-5 mr-2" />
+                View Brochure
+              </Link>
+            </motion.div>
           </motion.div>
         </div>
       </section>
+
+      {/* Free Laptop Promotional Modal */}
+      <AnimatePresence>
+        {showOfferModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm"
+            onClick={() => setShowOfferModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-background/80 backdrop-blur-2xl rounded-2xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(65,200,223,0.2)] relative border border-[#41c8df]/30 text-secondary"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowOfferModal(false)}
+                className="absolute top-4 right-4 text-gray-500 hover:text-secondary transition-colors"
+                title="Close Modal"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="relative w-full h-48 mb-6 rounded-xl overflow-hidden border border-secondary/10 shadow-2xl">
+                  <AnimatePresence mode="wait">
+                    <motion.img
+                      key={currentOfferImage}
+                      src={offerImages[currentOfferImage]}
+                      alt="Free Laptop Offer"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.5 }}
+                      className="w-full h-full object-cover"
+                    />
+                  </AnimatePresence>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  {/* Carousel Indicators */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex space-x-2">
+                    {offerImages.map((_, idx) => (
+                      <div
+                        key={idx}
+                        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${currentOfferImage === idx ? 'bg-[#41c8df] w-4' : 'bg-secondary/30'
+                          }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-secondary mb-2">Exclusive Offer!</h3>
+                <p className="text-gray-400 font-medium">
+                  The institute is providing a FREE laptop!
+                </p>
+              </div>
+
+              <div className="bg-secondary/5 rounded-xl p-4 border border-secondary/10 mb-6 text-center shadow-inner">
+                <p className="text-gray-300 font-semibold mb-2">
+                  Sign up for the course and get a free laptop.
+                </p>
+                <p className="text-[#41c8df] font-bold text-lg animate-pulse">
+                  Enroll now, limited slots available!
+                </p>
+              </div>
+
+              <Link
+                to={`/apply/${courseId}`}
+                onClick={() => setShowOfferModal(false)}
+                className="w-full bg-[#41c8df] text-black hover:bg-secondary py-4 px-6 rounded-lg font-semibold text-center block transition-all duration-300 shadow-[0_0_20px_rgba(65,200,223,0.3)] hover:shadow-[0_0_30px_rgba(65,200,223,0.5)]"
+              >
+                Proceed to Enrollment
+              </Link>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }; // Corrected closing brace for the component
