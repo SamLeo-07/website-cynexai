@@ -1,0 +1,234 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+:root {
+  --color-background: 248 250 252;
+  /* #f8fafc */
+  --color-bg-100: 255 255 255;
+  /* #ffffff */
+  --color-text: 15 23 42;
+  /* #0f172a */
+}
+
+.dark {
+  --color-background: 1 2 3;
+  /* #010203 */
+  --color-bg-100: 26 26 46;
+  /* #1a1a2e */
+  --color-text: 248 250 252;
+  /* #f8fafc */
+}
+
+body {
+  @apply bg-background text-secondary transition-colors duration-500;
+}
+
+/* ─── Animation Delays ────────────────────────────────────────────────────── */
+@layer utilities {
+  .animation-delay-1000 {
+    animation-delay: 1s;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-3000 {
+    animation-delay: 3s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  .animation-delay-5000 {
+    animation-delay: 5s;
+  }
+
+  /* ─── 3D Transform Utilities ─────────────────────────────────────────────── */
+  .perspective-600 {
+    perspective: 600px;
+  }
+
+  .perspective-800 {
+    perspective: 800px;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .perspective-1200 {
+    perspective: 1200px;
+  }
+
+  .transform-style-3d {
+    transform-style: preserve-3d;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  /* Custom Translate Z Utilities for deep 3D interactions */
+  .translate-z-\[20px\] {
+    transform: translateZ(20px);
+  }
+
+  .translate-z-\[30px\] {
+    transform: translateZ(30px);
+  }
+
+  .translate-z-\[40px\] {
+    transform: translateZ(40px);
+  }
+
+  .translate-z-\[50px\] {
+    transform: translateZ(50px);
+  }
+
+  .translate-z-\[60px\] {
+    transform: translateZ(60px);
+  }
+
+  .translate-z-\[80px\] {
+    transform: translateZ(80px);
+  }
+
+  .-translate-z-\[20px\] {
+    transform: translateZ(-20px);
+  }
+
+  .-translate-z-\[30px\] {
+    transform: translateZ(-30px);
+  }
+
+  .-translate-z-\[40px\] {
+    transform: translateZ(-40px);
+  }
+}
+
+/* ─── Keyframe Animations ────────────────────────────────────────────────── */
+
+/* Float animation with gentle 3D tilt */
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px) rotateX(0deg);
+  }
+
+  50% {
+    transform: translateY(-15px) rotateX(3deg);
+  }
+}
+
+/* Dedicated 3D float for contact orbs */
+@keyframes float3d {
+  0% {
+    transform: translateY(0px) translateZ(0px) rotateX(0deg) scale(1);
+  }
+
+  25% {
+    transform: translateY(-12px) translateZ(8px) rotateX(5deg) scale(1.03);
+  }
+
+  50% {
+    transform: translateY(-20px) translateZ(15px) rotateX(10deg) scale(1.05);
+  }
+
+  75% {
+    transform: translateY(-10px) translateZ(8px) rotateX(5deg) scale(1.02);
+  }
+
+  100% {
+    transform: translateY(0px) translateZ(0px) rotateX(0deg) scale(1);
+  }
+}
+
+/* 3D orbital spin */
+@keyframes spin3d {
+  from {
+    transform: translate(-50%, -50%) rotateX(var(--tilt, 60deg)) rotateZ(0deg);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotateX(var(--tilt, 60deg)) rotateZ(360deg);
+  }
+}
+
+/* Slow indefinite spin for galaxy */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Glow pulse */
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(65, 200, 223, 0.3), 0 0 20px rgba(65, 200, 223, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(65, 200, 223, 0.6), 0 0 40px rgba(65, 200, 223, 0.3);
+  }
+}
+
+/* Shimmer for holographic effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* ─── Utility Classes ─────────────────────────────────────────────────────── */
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-float-3d {
+  animation: float3d 6s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* Holographic border shimmer */
+.holographic-border {
+  background: linear-gradient(90deg,
+      rgba(65, 200, 223, 0.4) 0%,
+      rgba(139, 92, 246, 0.4) 25%,
+      rgba(65, 200, 223, 0.6) 50%,
+      rgba(139, 92, 246, 0.4) 75%,
+      rgba(65, 200, 223, 0.4) 100%);
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
+}
