@@ -70,7 +70,12 @@ const AdminPanel = () => {
   });
 
   useEffect(() => {
-    const authStatus = localStorage.getItem('cynexai_admin_auth');
+    // Clean up old persistent login from localStorage if it exists
+    if (localStorage.getItem('cynexai_admin_auth')) {
+      localStorage.removeItem('cynexai_admin_auth');
+    }
+
+    const authStatus = sessionStorage.getItem('cynexai_admin_auth');
     if (authStatus === 'true') {
       setIsAuthenticated(true);
       // Initialize database only after authentication
@@ -230,7 +235,8 @@ const AdminPanel = () => {
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
       setLoginError(null);
-      localStorage.setItem('cynexai_admin_auth', 'true');
+      localStorage.removeItem('cynexai_admin_auth'); // Final cleanup
+      sessionStorage.setItem('cynexai_admin_auth', 'true');
       // Initialize database after successful authentication
       await initializeData();
     } else {
@@ -239,7 +245,7 @@ const AdminPanel = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('cynexai_admin_auth');
+    sessionStorage.removeItem('cynexai_admin_auth');
     setIsAuthenticated(false);
   };
 
