@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "echo 'Vite Build Check: DB_URL='${VITE_TURSO_DATABASE_URL:0:15} && vite build",
+    "build": "node -e \"console.log('Build Diagnostic: VITE_TURSO_DATABASE_URL is ' + (process.env.VITE_TURSO_DATABASE_URL ? (process.env.VITE_TURSO_DATABASE_URL.substring(0, 10) + '...') : 'MISSING'))\" && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
