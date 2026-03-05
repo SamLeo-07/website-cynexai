@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "echo 'Vite Build Check: DB_URL='${VITE_TURSO_DATABASE_URL:0:15} && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
