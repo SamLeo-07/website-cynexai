@@ -240,7 +240,7 @@ const Footer = () => {
       >
         <ArrowUp className="w-5 h-5" />
       </motion.button>
-    </footer >
+    </footer>
   );
 };
 
