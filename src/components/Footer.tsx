@@ -224,7 +224,7 @@ const Footer = () => {
         <div className="py-6 border-t border-secondary/10">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-gray-300 text-sm text-center md:text-left">
-              © 2025 CynexAI. All rights reserved. | Privacy Policy | Terms of Service
+              © 2026 CynexAI. All rights reserved. | Privacy Policy | Terms of Service
             </div>
             {/* Social media icons are no longer rendered here */}
           </div>
