@@ -5,11 +5,12 @@ import { createClient } from '@libsql/client';
 const url = import.meta.env.VITE_TURSO_DATABASE_URL;
 const authToken = import.meta.env.VITE_TURSO_AUTH_TOKEN;
 
-// Diagnostic Logging
-console.log("Deepmind: Turso Configuration Init", {
+// Discovery Logging to see what Vite is picking up
+console.log("Deepmind: Environment Discovery", {
+  allViteVars: Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')),
   urlExists: !!url,
   tokenExists: !!authToken,
-  urlValue: url?.substring(0, 15) + "...",
+  urlPreview: url ? `${url.substring(0, 10)}...` : 'MISSING',
 });
 
 // Initialize the Turso client only if credentials are provided
