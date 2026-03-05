@@ -20,6 +20,7 @@ import PaymentPage from './components/PaymentPage';
 import BlogPage from './components/BlogPage';
 import BlogPostDetail from './components/BlogPostDetail';
 import ThreeBackground from './components/ThreeBackground';
+import AboutUs from './components/AboutUs';
 
 
 const HomePage = () => (
@@ -49,6 +50,7 @@ function App() {
           <Route path="/pay" element={<PaymentPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:id" element={<BlogPostDetail />} />
+          <Route path="/about" element={<AboutUs />} />
         </Routes>
         <Footer />
       </div>

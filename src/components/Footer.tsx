@@ -95,13 +95,12 @@ const Footer = () => {
               <Link
                 to="/"
                 onClick={(e) => handleNavClick('/', e)}
-                className="flex items-center space-x-3 mb-6 group transition-all duration-300 hover:scale-105 active:scale-95"
               >
-                <div className="relative bg-secondary/90 p-2 rounded-lg inline-block">
+                <div className="relative inline-block">
                   <img
                     src="/CynexAI Logo new (1).png"
                     alt="CynexAI"
-                    className="h-10 w-auto object-contain"
+                    className="h-12 w-auto object-contain filter brightness-0 invert opacity-90"
                   />
                 </div>
               </Link>
@@ -241,7 +240,7 @@ const Footer = () => {
       >
         <ArrowUp className="w-5 h-5" />
       </motion.button>
-    </footer>
+    </footer >
   );
 };
 

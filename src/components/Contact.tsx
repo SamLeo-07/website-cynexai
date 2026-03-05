@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
-import { Phone, Mail, Globe, MapPin, Clock, Users } from 'lucide-react';
+import { Phone, Mail, Globe, MapPin, Clock } from 'lucide-react';
 import './Contact.css';
 
 // ─── Floating Particle Orb ────────────────────────────────────────────────────
@@ -35,7 +35,6 @@ const Contact = () => {
   ];
 
   const stats = [
-    { icon: Users, value: '100+', label: 'Students Trained' },
     { icon: Clock, value: '24/7', label: 'Support Available' },
     { icon: Globe, value: '10+', label: 'Cities Reached' },
   ];

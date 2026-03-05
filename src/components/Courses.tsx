@@ -3,7 +3,7 @@
 import { motion, easeOut } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Clock, Users, Star } from 'lucide-react';
+import { ArrowRight, Clock, Star } from 'lucide-react';
 import TiltCard from './TiltCard';
 
 const Courses = () => {
@@ -16,7 +16,6 @@ const Courses = () => {
       description: 'Master data analysis, machine learning algorithms, and AI implementation for real-world applications.',
       image: 'https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=800',
       duration: '6 months',
-      students: '150+',
       rating: 4.9,
       level: 'Intermediate',
       skills: ['Python', 'TensorFlow', 'Pandas', 'Scikit-learn']
@@ -27,7 +26,6 @@ const Courses = () => {
       description: 'Deep dive into ML algorithms, neural networks, and advanced generative modeling techniques.',
       image: 'https://images.pexels.com/photos/8386434/pexels-photo-8386434.jpeg?auto=compress&cs=tinysrgb&w=800',
       duration: '6 months',
-      students: '200+',
       rating: 4.8,
       level: 'Advanced',
       skills: ['Python', 'PyTorch', 'Keras', 'Transformers']
@@ -38,7 +36,6 @@ const Courses = () => {
       description: 'Build robust web applications from frontend to backend using Java frameworks like Spring Boot.',
       image: '/java.png',
       duration: '6 months',
-      students: '120+',
       rating: 4.7,
       level: 'Intermediate',
       skills: ['Java', 'Spring Boot', 'React/Angular', 'SQL']
@@ -49,7 +46,6 @@ const Courses = () => {
       description: 'Learn cloud infrastructure, CI/CD pipelines, and deployment strategies on AWS, Azure, or GCP.',
       image: '/Devops.png',
       duration: '6 months',
-      students: '180+',
       rating: 4.8,
       level: 'Intermediate',
       skills: ['AWS', 'Docker', 'Kubernetes', 'Jenkins']
@@ -60,7 +56,6 @@ const Courses = () => {
       description: 'Master Python fundamentals for data analysis, web development, and automation.',
       image: 'https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=800',
       duration: '6 months',
-      students: '250+',
       rating: 4.7,
       level: 'Beginner',
       skills: ['Python', 'OOP', 'Data Structures', 'Flask/Django']
@@ -71,7 +66,6 @@ const Courses = () => {
       description: 'Master software testing methodologies, automation frameworks, and quality assurance for robust applications.',
       image: 'https://images.pexels.com/photos/1181263/pexels-photo-1181263.jpeg?auto=compress&cs=tinysrgb&w=800',
       duration: '6 months',
-      students: '140+',
       rating: 4.5,
       level: 'Intermediate',
       skills: ['Selenium', 'Jest', 'Cypress', 'API Testing']
@@ -82,7 +76,6 @@ const Courses = () => {
       description: 'Enterprise resource planning with SAP modules, business process optimization, and implementation strategies.',
       image: 'https://images.pexels.com/photos/1181316/pexels-photo-1181316.jpeg?auto=compress&cs=tinysrgb&w=800',
       duration: '6 months',
-      students: '90+',
       rating: 4.6,
       level: 'Professional',
       skills: ['SAP HANA', 'ABAP', 'Fiori', 'S/4HANA']
@@ -171,9 +164,6 @@ const Courses = () => {
                     <div className="flex items-center justify-between mb-4 text-sm font-medium text-gray-300 bg-secondary/5 p-3 rounded-xl border border-secondary/10 transform transition-transform duration-500 group-hover/card:translate-z-[40px] shadow-lg">
                       <div className="flex items-center">
                         <Clock className="w-4 h-4 mr-1.5 text-[#41c8df]" />{course.duration}
-                      </div>
-                      <div className="flex items-center">
-                        <Users className="w-4 h-4 mr-1.5 text-[#41c8df]" />{course.students}
                       </div>
                       <div className="flex items-center">
                         <Star className="w-4 h-4 mr-1.5 text-yellow-400" />{course.rating}
