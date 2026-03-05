@@ -73,14 +73,15 @@ const AdminPanel = () => {
     const authStatus = localStorage.getItem('cynexai_admin_auth');
     if (authStatus === 'true') {
       setIsAuthenticated(true);
+      // Initialize database only after authentication
+      initializeData();
     }
-
-    const init = async () => {
-      await initTursoDB();
-      fetchPosts();
-    };
-    init();
   }, []);
+
+  const initializeData = async () => {
+    await initTursoDB();
+    fetchPosts();
+  };
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -225,11 +226,13 @@ const AdminPanel = () => {
     }
   };
 
-  const handleLogin = (password: string) => {
+  const handleLogin = async (password: string) => {
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
       setLoginError(null);
       localStorage.setItem('cynexai_admin_auth', 'true');
+      // Initialize database after successful authentication
+      await initializeData();
     } else {
       setLoginError('Invalid security password');
     }

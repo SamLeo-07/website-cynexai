@@ -34,6 +34,7 @@ export const client = isTursoConfigured
 
 // Circuit Breaker: If connection fails, stop trying to use Turso for this session
 let dbConnectionFailed = false;
+let dbInitialized = false;
 
 
 export interface User {
@@ -450,6 +451,11 @@ export const syncSamplePosts = async () => {
 };
 
 export const initTursoDB = async () => {
+  // Skip if already initialized
+  if (dbInitialized) {
+    return true;
+  }
+  
   if (isTursoConfigured && client && !dbConnectionFailed) {
     try {
       // Create tables if they don't exist
@@ -565,6 +571,7 @@ export const initTursoDB = async () => {
       // Sync sample posts securely and robustly
       await syncSamplePosts();
 
+      dbInitialized = true;
       console.log("Turso Cloud Database Connected and Initialized");
       return true;
     } catch (e) {

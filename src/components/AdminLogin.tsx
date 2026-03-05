@@ -21,15 +21,13 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error }) => {
         e.preventDefault();
         setLoading(true);
 
-        // Simulate a brief loading state for better UX
-        setTimeout(() => {
-            if (isMounted.current) {
-                onLogin(password);
-            }
-            if (isMounted.current) {
-                setLoading(false);
-            }
-        }, 600);
+        // Immediate login verification
+        if (isMounted.current) {
+            onLogin(password);
+        }
+        if (isMounted.current) {
+            setLoading(false);
+        }
     };
 
     return (
