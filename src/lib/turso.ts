@@ -22,6 +22,13 @@ export const isTursoConfigured = Boolean(
   authToken !== 'your_auth_token'
 );
 
+export const getMissingEnvVars = () => {
+  const missing = [];
+  if (!url || url.trim() === '' || url === 'your_database_url') missing.push('DATABASE_URL');
+  if (!authToken || authToken.trim() === '' || authToken === 'your_auth_token') missing.push('AUTH_TOKEN');
+  return missing;
+};
+
 if (isTursoConfigured) {
   console.log("Deepmind: Turso Cloud is ACTIVE");
 } else {
@@ -455,7 +462,7 @@ export const initTursoDB = async () => {
   if (dbInitialized) {
     return true;
   }
-  
+
   if (isTursoConfigured && client && !dbConnectionFailed) {
     try {
       // Create tables if they don't exist
@@ -1052,7 +1059,13 @@ export const updateApplicationStatus = async (id: string, status: 'approved' | '
 
 export const testConnection = async () => {
   console.log("Deepmind: Starting Connection Diagnostic...");
-  if (!isTursoConfigured) return { success: false, message: "VITE environment variables missing or invalid." };
+  if (!isTursoConfigured) {
+    const missing = getMissingEnvVars();
+    return {
+      success: false,
+      message: `VITE environment variables missing: ${missing.join(', ')}. Please check Netlify Settings > Site configuration > Environment variables.`
+    };
+  }
   if (!client) return { success: false, message: "LibSQL client failed to initialize." };
 
   try {
