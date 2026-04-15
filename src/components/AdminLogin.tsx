@@ -7,25 +7,30 @@ interface AdminLoginProps {
     error?: string | null;
 }
 
-const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error: externalError }) => {
+const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error }) => {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [localError, setLocalError] = useState<string | null>(null);
+
+    const isMounted = React.useRef(true);
+    React.useEffect(() => {
+        return () => { isMounted.current = false; };
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setLocalError(null);
 
         // Simulate a brief loading state for better UX
         setTimeout(() => {
-            onLogin(password);
-            setLoading(false);
+            if (isMounted.current) {
+                onLogin(password);
+            }
+            if (isMounted.current) {
+                setLoading(false);
+            }
         }, 600);
     };
-
-    const error = externalError || localError;
 
     return (
         <div className="min-h-screen bg-transparent flex items-center justify-center p-4 selection:bg-[#41c8df]/30 relative z-10">
@@ -72,7 +77,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error: externalError }
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-3 ml-1">
+                            <label htmlFor="password" className="block text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-3 ml-1">
                                 Security Password
                             </label>
                             <div className="relative group">
@@ -80,17 +85,21 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error: externalError }
                                     <Lock size={20} />
                                 </div>
                                 <input
+                                    id="password"
                                     required
                                     autoFocus
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
+                                    aria-label="Security Password"
                                     className="w-full pl-14 pr-14 py-5 bg-secondary/5 border-2 border-transparent focus:bg-secondary/10 focus:border-[#41c8df]/50 rounded-2xl outline-none transition-all text-secondary font-mono placeholder:text-gray-700"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                    title={showPassword ? "Hide password" : "Show password"}
                                     className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-secondary transition-colors p-1"
                                 >
                                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -136,7 +145,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error: externalError }
                 {/* Footer info */}
                 <p className="text-center mt-8 text-gray-600 text-xs font-bold uppercase tracking-widest leading-relaxed">
                     Authorized personnel only. All access attempts are <br />
-                    loggued and monitored by CynexAI Security.
+                    logged and monitored by CynexAI Security.
                 </p>
             </motion.div>
         </div>

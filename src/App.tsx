@@ -19,6 +19,8 @@ import AdminPanel from './components/AdminPanel';
 import PaymentPage from './components/PaymentPage';
 import BlogPage from './components/BlogPage';
 import BlogPostDetail from './components/BlogPostDetail';
+import ThreeBackground from './components/ThreeBackground';
+import AboutUs from './components/AboutUs';
 
 
 const HomePage = () => (
@@ -35,7 +37,8 @@ function App() {
   return (
     <Router>
       <ScrollToTop />
-      <div className="min-h-screen bg-primary-900">
+      <ThreeBackground />
+      <div className="min-h-screen relative z-10">
         <Header />
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -47,6 +50,7 @@ function App() {
           <Route path="/pay" element={<PaymentPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:id" element={<BlogPostDetail />} />
+          <Route path="/about" element={<AboutUs />} />
         </Routes>
         <Footer />
       </div>

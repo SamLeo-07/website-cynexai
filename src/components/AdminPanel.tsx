@@ -42,6 +42,9 @@ import {
   populateSampleData
 } from '../lib/turso';
 import { advancedAiPosts } from '../data/aiPosts';
+import AdminLogin from './AdminLogin';
+
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'CynexAI@2026';
 
 const AdminPanel = () => {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -54,6 +57,8 @@ const AdminPanel = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<Omit<Post, 'id' | 'date'>>({
@@ -65,6 +70,11 @@ const AdminPanel = () => {
   });
 
   useEffect(() => {
+    const authStatus = localStorage.getItem('cynexai_admin_auth');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+
     const init = async () => {
       await initTursoDB();
       fetchPosts();
@@ -215,9 +225,19 @@ const AdminPanel = () => {
     }
   };
 
+  const handleLogin = (password: string) => {
+    if (password === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setLoginError(null);
+      localStorage.setItem('cynexai_admin_auth', 'true');
+    } else {
+      setLoginError('Invalid security password');
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('cynexai_admin_auth');
-    window.location.reload();
+    setIsAuthenticated(false);
   };
 
   const handleRunDiagnostics = async () => {
@@ -301,6 +321,10 @@ const AdminPanel = () => {
     post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     post.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (!isAuthenticated) {
+    return <AdminLogin onLogin={handleLogin} error={loginError} />;
+  }
 
   return (
     <div className="min-h-screen bg-transparent pt-24 pb-12 px-4 sm:px-6 lg:px-8 text-secondary">

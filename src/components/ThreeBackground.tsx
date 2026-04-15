@@ -6,19 +6,19 @@ import { useTheme } from '../hooks/useTheme';
 import './ThreeBackground.css';
 
 // ─── Constants & Utils ────────────────────────────────────────────────────────
-const PARTICLE_COUNT = 300; // Much lower for a clean network
-const NETWORK_RADIUS = 25;
+const GRID_SIZE = 40;     // Number of points along X and Z axes
+const SPACING = 1.5;      // Distance between points
+const PARTICLE_COUNT = GRID_SIZE * GRID_SIZE;
 
-// ─── Ambient Glows (Soft Background Gradients) ──────────────────────────────
+// ─── Soft Ambient Backlight ──────────────────────────────────────────────────
 const AmbientGlows = () => {
     const { isDarkMode } = useTheme();
     const groupRef = useRef<THREE.Group>(null!);
-    
-    // Create large, soft glowing spheres
+
     const glows = useMemo(() => [
-        { color: isDarkMode ? '#8b5cf6' : '#005bea', pos: [-15, 5, -20], scale: 25, speed: 0.1 },
-        { color: isDarkMode ? '#41c8df' : '#00c6fb', pos: [15, -5, -25], scale: 30, speed: -0.05 },
-        { color: isDarkMode ? '#ec4899' : '#ff0844', pos: [0, 10, -30], scale: 20, speed: 0.08 }
+        { color: isDarkMode ? '#1e1b4b' : '#e0f2fe', pos: [-20, 0, -30], scale: 40, speed: 0.05 },
+        { color: isDarkMode ? '#0f172a' : '#f8fafc', pos: [20, -10, -40], scale: 50, speed: -0.03 },
+        { color: isDarkMode ? '#41c8df' : '#bae6fd', pos: [0, 15, -45], scale: 35, speed: 0.02 }
     ], [isDarkMode]);
 
     useFrame((state) => {
@@ -26,8 +26,8 @@ const AmbientGlows = () => {
         const t = state.clock.getElapsedTime();
         groupRef.current.children.forEach((child, i) => {
             const glow = glows[i];
-            child.position.y = glow.pos[1] + Math.sin(t * glow.speed) * 5;
-            child.position.x = glow.pos[0] + Math.cos(t * glow.speed) * 3;
+            child.position.y = glow.pos[1] + Math.sin(t * glow.speed) * 4;
+            child.position.x = glow.pos[0] + Math.cos(t * glow.speed) * 4;
         });
     });
 
@@ -36,11 +36,11 @@ const AmbientGlows = () => {
             {glows.map((glow, i) => (
                 <mesh key={i} position={new THREE.Vector3(...glow.pos)}>
                     <sphereGeometry args={[glow.scale, 32, 32]} />
-                    <meshBasicMaterial 
-                        color={glow.color} 
-                        transparent 
-                        opacity={isDarkMode ? 0.15 : 0.08} 
-                        blending={THREE.AdditiveBlending}
+                    <meshBasicMaterial
+                        color={glow.color}
+                        transparent
+                        opacity={isDarkMode ? 0.3 : 0.4}
+                        blending={THREE.NormalBlending}
                         depthWrite={false}
                     />
                 </mesh>
@@ -49,305 +49,188 @@ const AmbientGlows = () => {
     );
 };
 
-// ─── Floating Glass Shapes (Modern 3D Elements) ─────────────────────────────
-const FloatingGlassShapes = () => {
+// ─── Central Glass Core (The "AI Brain") ─────────────────────────────────────
+const CentralCore = () => {
     const { isDarkMode } = useTheme();
-    const groupRef = useRef<THREE.Group>(null!);
-    const { pointer, size } = useThree();
-
-    const shapes = useMemo(() => {
-        const items = [];
-        for (let i = 0; i < 15; i++) {
-            items.push({
-                type: Math.floor(Math.random() * 3), // 0: Icosahedron, 1: Torus, 2: Sphere
-                position: new THREE.Vector3(
-                    (Math.random() - 0.5) * 50,
-                    (Math.random() - 0.5) * 40,
-                    (Math.random() - 0.5) * 30 - 10
-                ),
-                rotation: new THREE.Euler(
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI
-                ),
-                scale: 0.5 + Math.random() * 1.5,
-                speed: new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.01,
-                    (Math.random() - 0.5) * 0.01,
-                    (Math.random() - 0.5) * 0.01
-                )
-            });
-        }
-        return items;
-    }, []);
+    const coreRef = useRef<THREE.Mesh>(null!);
+    const wireRef = useRef<THREE.LineSegments>(null!);
 
     useFrame((state) => {
-        if (!groupRef.current) return;
-        
-        const mouseX = (pointer.x * size.width) / 100;
-        const mouseY = (pointer.y * size.height) / 100;
+        if (!coreRef.current || !wireRef.current) return;
+        const t = state.clock.getElapsedTime();
 
-        groupRef.current.children.forEach((child, i) => {
-            const shape = shapes[i];
-            child.rotation.x += shape.speed.x;
-            child.rotation.y += shape.speed.y;
-            
-            // Gentle floating
-            child.position.y += Math.sin(state.clock.getElapsedTime() + i) * 0.01;
-            
-            // Slight mouse parallax
-            child.position.x += (mouseX * 0.01 - child.position.x * 0.001) * 0.5;
-            child.position.y += (mouseY * 0.01 - child.position.y * 0.001) * 0.5;
-        });
+        // Elegant, slow rotation
+        coreRef.current.rotation.y = t * 0.1;
+        coreRef.current.rotation.x = Math.sin(t * 0.05) * 0.2;
+
+        // Gentle hover
+        coreRef.current.position.y = 8 + Math.sin(t * 0.5) * 0.5;
+
+        // Sync wireframe
+        wireRef.current.rotation.copy(coreRef.current.rotation);
+        wireRef.current.position.copy(coreRef.current.position);
     });
 
-    // Glass material
-    const glassMaterial = new THREE.MeshPhysicalMaterial({
+    const glassMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
         color: isDarkMode ? '#ffffff' : '#41c8df',
         metalness: 0.1,
-        roughness: 0.2,
-        transmission: 0.9, // glass effect
+        roughness: 0.1,
+        transmission: 0.95, // Highly transparent glass
         ior: 1.5,
         transparent: true,
-        opacity: isDarkMode ? 0.4 : 0.6,
-        wireframe: false,
-    });
+        opacity: 1,
+        thickness: 2.0,
+    }), [isDarkMode]);
+
+    const geometry = useMemo(() => new THREE.IcosahedronGeometry(4, 0), []);
+    const edges = useMemo(() => new THREE.EdgesGeometry(geometry), [geometry]);
 
     return (
-        <group ref={groupRef}>
-            {shapes.map((s, i) => (
-                <mesh key={i} position={s.position} rotation={s.rotation} scale={new THREE.Vector3(s.scale, s.scale, s.scale)} material={glassMaterial}>
-                    {s.type === 0 && <icosahedronGeometry args={[1, 0]} />}
-                    {s.type === 1 && <torusGeometry args={[0.8, 0.3, 16, 32]} />}
-                    {s.type === 2 && <sphereGeometry args={[1, 32, 32]} />}
-                </mesh>
-            ))}
+        <group>
+            <mesh ref={coreRef} geometry={geometry} material={glassMaterial} position={[0, 8, -5]} />
+            <lineSegments ref={wireRef} geometry={edges} position={[0, 8, -5]}>
+                <lineBasicMaterial
+                    color={isDarkMode ? '#41c8df' : '#0369a1'}
+                    transparent
+                    opacity={0.3}
+                />
+            </lineSegments>
         </group>
     );
 };
 
-// ─── Clean Interactive Network (Connecting Nodes) ───────────────────────────
-const CleanNetwork = () => {
+// ─── The Knowledge Grid (Dynamic Undulating Data Floor) ────────────────────
+const KnowledgeGrid = () => {
     const { isDarkMode } = useTheme();
     const groupRef = useRef<THREE.Group>(null!);
     const { pointer, size } = useThree();
 
+    // 1. Initialize Grid Positions
     const { positions, initialPositions } = useMemo(() => {
         const pos = new Float32Array(PARTICLE_COUNT * 3);
         const initPos = new Float32Array(PARTICLE_COUNT * 3);
-        
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-            // Distribute in a wide sphere
-            const r = Math.random() * NETWORK_RADIUS;
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos((Math.random() * 2) - 1);
 
-            const x = r * Math.sin(phi) * Math.cos(theta);
-            const y = r * Math.sin(phi) * Math.sin(theta);
-            const z = r * Math.cos(phi);
+        let i = 0;
+        const offset = (GRID_SIZE * SPACING) / 2;
 
-            pos[i * 3] = x;
-            pos[i * 3 + 1] = y;
-            pos[i * 3 + 2] = z;
-            
-            initPos[i * 3] = x;
-            initPos[i * 3 + 1] = y;
-            initPos[i * 3 + 2] = z;
+        for (let x = 0; x < GRID_SIZE; x++) {
+            for (let z = 0; z < GRID_SIZE; z++) {
+                const px = (x * SPACING) - offset;
+                const pz = (z * SPACING) - offset;
+                const py = 0; // Starts flat
+
+                pos[i * 3] = px;
+                pos[i * 3 + 1] = py;
+                pos[i * 3 + 2] = pz;
+
+                initPos[i * 3] = px;
+                initPos[i * 3 + 1] = py;
+                initPos[i * 3 + 2] = pz;
+                i++;
+            }
         }
         return { positions: pos, initialPositions: initPos };
     }, []);
 
     const pointsRef = useRef<THREE.Points>(null!);
     const linesRef = useRef<THREE.LineSegments>(null!);
-    
-    // Store lines geometry state
     const [lineGeometry, setLineGeometry] = useState<THREE.BufferGeometry | null>(null);
 
+    // 2. Setup Line Connections (Grid Structure)
     useEffect(() => {
         const geo = new THREE.BufferGeometry();
-        // Initial empty array, max possible connections
-        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PARTICLE_COUNT * PARTICLE_COUNT * 3), 3));
+        // Each point connects to Max 4 neighbors (Grid structure)
+        const maxLines = PARTICLE_COUNT * 4 * 2;
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxLines * 3), 3));
+
+        // Pre-compute grid connections once
+        const indices: number[] = [];
+        for (let x = 0; x < GRID_SIZE; x++) {
+            for (let z = 0; z < GRID_SIZE; z++) {
+                const i = x * GRID_SIZE + z;
+                // Connect Right
+                if (x < GRID_SIZE - 1) indices.push(i, i + GRID_SIZE);
+                // Connect Down
+                if (z < GRID_SIZE - 1) indices.push(i, i + 1);
+            }
+        }
+        geo.setIndex(indices);
         setLineGeometry(geo);
     }, []);
 
+    // 3. Animation Loop
     useFrame((state) => {
-        if (!groupRef.current || !pointsRef.current || !lineGeometry) return;
-        
+        if (!pointsRef.current || !lineGeometry) return;
+
         const t = state.clock.getElapsedTime();
         const pos = pointsRef.current.geometry.attributes.position.array as Float32Array;
-        
-        // Mouse interaction in world space
-        const mouseX = (pointer.x * size.width) / 50; 
-        const mouseY = (pointer.y * size.height) / 50;
-        const mouseVec = new THREE.Vector3(mouseX, mouseY, 0);
 
-        // 1. Move Particles
+        // Convert mouse to world space (roughly mapped to grid area)
+        const mouseX = (pointer.x * size.width) / 20;
+        const mouseZ = -(pointer.y * size.height) / 20;
+
         for (let i = 0; i < PARTICLE_COUNT; i++) {
             const ix = i * 3;
             const iy = i * 3 + 1;
             const iz = i * 3 + 2;
 
-            // Gentle floating drift
-            pos[ix] = initialPositions[ix] + Math.sin(t * 0.2 + i) * 2;
-            pos[iy] = initialPositions[iy] + Math.cos(t * 0.3 + i) * 2;
-            
-            // Magnetic effect towards mouse
-            const pVec = new THREE.Vector3(pos[ix], pos[iy], pos[iz]);
-            const dist = pVec.distanceTo(mouseVec);
-            
-            if (dist < 10) {
-                // Pull slightly towards mouse
-                const dir = mouseVec.clone().sub(pVec).normalize();
-                const force = (10 - dist) * 0.02;
-                pos[ix] += dir.x * force;
-                pos[iy] += dir.y * force;
-            } else {
-                // Return to base gently if pulled
-                pos[ix] += (initialPositions[ix] - pos[ix]) * 0.01;
-                pos[iy] += (initialPositions[iy] - pos[iy]) * 0.01;
+            const px = initialPositions[ix];
+            const pz = initialPositions[iz];
+
+            // Primary Wave Motion
+            let y = Math.sin(px * 0.1 + t * 0.5) * Math.cos(pz * 0.1 + t * 0.3) * 2.0;
+
+            // Secondary Wave (Complexity)
+            y += Math.sin(px * 0.05 - t * 0.2) * 1.5;
+
+            // Interactive "Ripple" from Mouse
+            const distToMouse = Math.sqrt(Math.pow(px - mouseX, 2) + Math.pow(pz - mouseZ, 2));
+            if (distToMouse < 15) {
+                // Creates a gentle hill lifting towards the mouse
+                const influence = Math.cos((distToMouse / 15) * (Math.PI / 2));
+                y += influence * 3.0;
             }
+
+            pos[iy] = y - 5; // Lower the whole grid
         }
+
         pointsRef.current.geometry.attributes.position.needsUpdate = true;
 
-        // 2. Draw Connections
-        let vertexIndex = 0;
-        const linePos = lineGeometry.attributes.position.array as Float32Array;
-        
-        const connectDistance = 6;
-        
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-            for (let j = i + 1; j < PARTICLE_COUNT; j++) {
-                const dx = pos[i * 3] - pos[j * 3];
-                const dy = pos[i * 3 + 1] - pos[j * 3 + 1];
-                const dz = pos[i * 3 + 2] - pos[j * 3 + 2];
-                const distSq = dx * dx + dy * dy + dz * dz;
-
-                if (distSq < connectDistance * connectDistance) {
-                    linePos[vertexIndex++] = pos[i * 3];
-                    linePos[vertexIndex++] = pos[i * 3 + 1];
-                    linePos[vertexIndex++] = pos[i * 3 + 2];
-                    
-                    linePos[vertexIndex++] = pos[j * 3];
-                    linePos[vertexIndex++] = pos[j * 3 + 1];
-                    linePos[vertexIndex++] = pos[j * 3 + 2];
-                }
+        // Sync lines to new points
+        if (linesRef.current) {
+            const linePos = lineGeometry.attributes.position.array as Float32Array;
+            for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+                linePos[i] = pos[i];
             }
+            lineGeometry.attributes.position.needsUpdate = true;
         }
-        
-        lineGeometry.setDrawRange(0, vertexIndex / 3);
-        lineGeometry.attributes.position.needsUpdate = true;
-        
-        // Slow rotation of entire network
-        groupRef.current.rotation.y = t * 0.02;
     });
 
     return (
-        <group ref={groupRef}>
+        <group ref={groupRef} position={[0, -2, 0]} rotation={[0.2, 0, 0]}>
             <Points ref={pointsRef} positions={positions} stride={3}>
-                <PointMaterial 
-                    transparent 
-                    color={isDarkMode ? '#00f2fe' : '#41c8df'} 
-                    size={0.15} 
-                    sizeAttenuation 
-                    depthWrite={false} 
-                    opacity={0.8} 
+                <PointMaterial
+                    transparent
+                    color={isDarkMode ? '#41c8df' : '#0369a1'}
+                    size={0.1}
+                    sizeAttenuation
+                    depthWrite={false}
+                    opacity={0.8}
                     blending={THREE.AdditiveBlending}
                 />
             </Points>
             {lineGeometry && (
                 <lineSegments ref={linesRef} geometry={lineGeometry}>
-                    <lineBasicMaterial 
-                        color={isDarkMode ? '#4facfe' : '#41c8df'} 
-                        transparent 
-                        opacity={0.15} 
-                        blending={THREE.AdditiveBlending} 
+                    <lineBasicMaterial
+                        color={isDarkMode ? '#0ea5e9' : '#38bdf8'}
+                        transparent
+                        opacity={isDarkMode ? 0.08 : 0.15}
+                        blending={THREE.AdditiveBlending}
+                        depthWrite={false}
                     />
                 </lineSegments>
             )}
         </group>
-    );
-};
-
-// ─── Interactive Click Ripples ────────────────────────────────────────────────
-interface Ripple {
-    id: number;
-    position: THREE.Vector3;
-    startTime: number;
-}
-
-const InteractiveRipples = () => {
-    const groupRef = useRef<THREE.Group>(null!);
-    const { camera } = useThree();
-    const isDark = useTheme().isDarkMode;
-    const [ripples, setRipples] = useState<Ripple[]>([]);
-
-    useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
-            const vec = new THREE.Vector3();
-            const pos = new THREE.Vector3();
-
-            vec.set(
-                (e.clientX / window.innerWidth) * 2 - 1,
-                -(e.clientY / window.innerHeight) * 2 + 1,
-                0.5
-            );
-            vec.unproject(camera);
-            vec.sub(camera.position).normalize();
-
-            const distance = -camera.position.z / vec.z;
-            pos.copy(camera.position).add(vec.multiplyScalar(distance));
-            pos.z = Math.max(-10, Math.min(pos.z, 5));
-
-            const newId = Date.now() + Math.random();
-            setRipples((prev) => [...prev, { id: newId, position: pos, startTime: Date.now() }]);
-
-            setTimeout(() => {
-                setRipples((prev) => prev.filter(r => r.id !== newId));
-            }, 2000);
-        };
-
-        window.addEventListener('click', handleClick);
-        return () => window.removeEventListener('click', handleClick);
-    }, [camera]);
-
-    return (
-        <group ref={groupRef}>
-            {ripples.map(r => (
-                <RippleEffect key={r.id} position={r.position} startTime={r.startTime} isDarkMode={isDark} />
-            ))}
-        </group>
-    );
-};
-
-const RippleEffect = ({ position, startTime, isDarkMode }: { position: THREE.Vector3, startTime: number, isDarkMode: boolean }) => {
-    const ringRef = useRef<THREE.Mesh>(null!);
-
-    useFrame(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        const maxLife = 1.5;
-
-        if (elapsed > maxLife) return;
-
-        const progress = Math.min(1, elapsed / maxLife);
-
-        if (ringRef.current) {
-            const ringScale = 1 + progress * 15;
-            ringRef.current.scale.set(ringScale, ringScale, ringScale);
-            (ringRef.current.material as THREE.MeshBasicMaterial).opacity = (1 - Math.pow(progress, 0.5)) * 0.4;
-        }
-    });
-
-    return (
-        <mesh ref={ringRef} position={position}>
-            <ringGeometry args={[0.9, 1, 32]} />
-            <meshBasicMaterial
-                color={isDarkMode ? '#00f2fe' : '#41c8df'}
-                transparent
-                opacity={0.4}
-                blending={THREE.AdditiveBlending}
-                side={THREE.DoubleSide}
-            />
-        </mesh>
     );
 };
 
@@ -360,22 +243,32 @@ const CameraController = () => {
     useFrame((state) => {
         const t = state.clock.getElapsedTime();
         const scrollY = window.scrollY;
-        // Check if body exists to prevent errors
-        const maxScroll = document.documentElement.scrollHeight > 0 ? document.documentElement.scrollHeight - window.innerHeight : 1;
-        const scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
 
-        // Smooth translation on scroll
-        const targetZ = 35 - scrollProgress * 15;
-        const targetY = 5 - scrollProgress * 5; 
+        // Prevent division by zero if body not fully loaded
+        const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        const scrollProgress = scrollY / maxScroll;
 
-        // Mouse Parallax 
-        const mouseX = (mouse.x * size.width) / 100;
-        const mouseY = (mouse.y * size.height) / 100;
+        // Base Camera Position (Professional angle looking slightly down)
+        const baseY = 8;
+        const baseZ = 28;
 
-        vec.set(mouseX * 0.1, targetY + mouseY * 0.1 + Math.sin(t * 0.5) * 0.5, targetZ);
-        camera.position.lerp(vec, 0.05);
+        // Scroll adjusts perspective
+        const targetZ = baseZ - scrollProgress * 10;
+        const targetY = baseY - scrollProgress * 4;
 
-        camera.lookAt(0, 0, 0);
+        // Very subtle Mouse Parallax for premium feel
+        const mouseX = (mouse.x * size.width) / 200;
+        const mouseY = (mouse.y * size.height) / 200;
+
+        vec.set(
+            mouseX,
+            targetY + mouseY + Math.sin(t * 0.2) * 0.5, // Slow breathing effect
+            targetZ
+        );
+        camera.position.lerp(vec, 0.03); // Very smooth interpolation
+
+        // Look at the core/center
+        camera.lookAt(0, 4, -5);
     });
 
     return null;
@@ -387,28 +280,49 @@ const ThreeBackground = () => {
 
     return (
         <div className={`fixed inset-0 z-[-1] pointer-events-none transition-colors duration-1000 three-background ${isDarkMode ? 'dark' : ''}`}>
+            {/* Base gradients fallback behind Canvas */}
+            <div className={`absolute inset-0 transition-colors duration-1000 ${isDarkMode ? 'bg-[#030712]' : 'bg-[#f8fafc]'}`} />
+
             <Canvas
-                camera={{ position: [0, 5, 35], fov: 60 }}
-                gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
-                dpr={Math.min(window.devicePixelRatio, 1.5)}
+                camera={{ position: [0, 8, 28], fov: 50 }}
+                gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+                dpr={Math.min(window.devicePixelRatio, 1.5)} // Cap DPR for performance
             >
                 <CameraController />
-                <fog attach="fog" args={[isDarkMode ? '#050510' : '#f0f4f8', 15, 60]} />
+                <fog attach="fog" args={[isDarkMode ? '#030712' : '#f8fafc', 10, 50]} />
 
-                {/* Lighting for the glass shapes */}
+                {/* Lighting tailored for the Glass Core */}
                 <ambientLight intensity={isDarkMode ? 0.3 : 0.8} />
-                <directionalLight position={[10, 10, 5]} intensity={isDarkMode ? 1 : 1.5} color="#ffffff" />
-                <pointLight position={[-10, -10, -5]} intensity={0.5} color="#41c8df" />
+                <directionalLight position={[10, 20, 10]} intensity={isDarkMode ? 1 : 1.5} color="#ffffff" />
+                <pointLight position={[-10, 5, -5]} intensity={0.5} color="#41c8df" />
 
-                {/* Modern Scene Elements */}
+                {/* Mouse-tracking highlight light */}
+                <MouseLight />
+
+                {/* Scene Elements */}
                 <AmbientGlows />
-                <CleanNetwork />
-                <FloatingGlassShapes />
-                <InteractiveRipples />
-
+                <KnowledgeGrid />
+                <CentralCore />
             </Canvas>
         </div>
     );
 };
 
+// Extracted component for interactive lighting
+const MouseLight = () => {
+    const lightRef = useRef<THREE.PointLight>(null!);
+    const { pointer, size } = useThree();
+
+    useFrame(() => {
+        if (!lightRef.current) return;
+        const mouseX = (pointer.x * size.width) / 15;
+        const mouseY = (pointer.y * size.height) / 15;
+
+        lightRef.current.position.set(mouseX, mouseY + 5, -10);
+    });
+
+    return <pointLight ref={lightRef} intensity={0.8} color="#41c8df" distance={25} decay={2} />;
+}
+
 export default ThreeBackground;
+
