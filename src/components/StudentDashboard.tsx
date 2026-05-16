@@ -48,20 +48,20 @@ const StudentDashboard = ({
     <div className="space-y-10 pb-12">
       {/* Hero Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-gradient-to-br from-[#41c8df]/10 to-emerald-50/50 border border-slate-200 rounded-[3rem] p-10 relative overflow-hidden group shadow-sm">
+        <div className="lg:col-span-2 bg-gradient-to-br from-[#41c8df]/10 to-emerald-50/50 border border-slate-200 rounded-[2rem] lg:rounded-[3rem] p-6 lg:p-10 relative overflow-hidden group shadow-sm">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#41c8df]/5 blur-[80px] rounded-full -mr-20 -mt-20 group-hover:bg-[#41c8df]/10 transition-all duration-700" />
           <div className="relative z-10">
-            <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">
-              Welcome back, <span className="text-[#41c8df]">{studentName}</span>!
+            <h2 className="text-3xl lg:text-4xl font-black text-slate-900 mb-4 tracking-tight">
+              Welcome back, <br className="sm:hidden" /> <span className="text-[#41c8df]">{studentName}</span>!
             </h2>
-            <p className="text-slate-600 max-w-md mb-8 leading-relaxed font-medium">
+            <p className="text-sm lg:text-base text-slate-600 max-w-md mb-8 leading-relaxed font-medium">
               You are currently mastering <span className="text-slate-900 font-bold">{enrollments.length} skills</span>. 
               Keep up the momentum to reach your certification goals.
             </p>
             <div className="flex flex-wrap gap-4">
               <button 
                 onClick={() => setActiveTab('courses')}
-                className="px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl flex items-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10"
+                className="w-full sm:w-auto px-8 lg:px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10"
               >
                 Continue Learning <ArrowRight size={20} />
               </button>
@@ -69,7 +69,7 @@ const StudentDashboard = ({
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-[3rem] p-8 flex flex-col justify-between shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-[2rem] lg:rounded-[3rem] p-6 lg:p-8 flex flex-col justify-between shadow-sm">
           <div>
             <div className="flex items-center justify-between mb-8">
               <h3 className="font-bold text-slate-900">Training Pulse</h3>
@@ -120,21 +120,21 @@ const StudentDashboard = ({
             {onboardingSteps.map((step) => (
               <div 
                 key={step.id}
-                className={`p-8 rounded-[2.5rem] border transition-all text-left group/step ${
+                className={`p-6 lg:p-8 rounded-[2rem] lg:rounded-[2.5rem] border transition-all text-left group/step ${
                   step.done 
                     ? 'bg-emerald-50 border-emerald-100' 
                     : 'bg-white border-slate-200 hover:border-[#41c8df] shadow-sm'
                 }`}
               >
                 <div className="flex items-start justify-between mb-6">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                  <div className={`w-10 h-10 lg:w-12 lg:h-12 rounded-xl lg:rounded-2xl flex items-center justify-center transition-all ${
                     step.done ? 'bg-white text-emerald-500 shadow-sm' : 'bg-slate-50 text-slate-300 group-hover/step:bg-[#41c8df]/10 group-hover/step:text-[#41c8df]'
                   }`}>
-                    {step.done ? <CheckCircle2 size={24} /> : <Target size={24} />}
+                    {step.done ? <CheckCircle2 size={20} /> : <Target size={20} />}
                   </div>
                   <button 
                     onClick={() => handleStepAction(step.id)}
-                    className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${
+                    className={`px-4 lg:px-6 py-2 rounded-xl text-[10px] lg:text-xs font-black transition-all ${
                       step.done 
                         ? 'bg-emerald-100 text-emerald-700' 
                         : 'bg-slate-900 text-white shadow-lg shadow-slate-900/10 hover:scale-105 active:scale-95'
@@ -143,28 +143,28 @@ const StudentDashboard = ({
                     {step.done ? 'COMPLETED' : 'ACTION'}
                   </button>
                 </div>
-                <h4 className={`font-black text-lg mb-2 transition-colors ${step.done ? 'text-emerald-700' : 'text-slate-900 group-hover/step:text-[#41c8df]'}`}>{step.title}</h4>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">{step.description}</p>
+                <h4 className={`font-black text-base lg:text-lg mb-2 transition-colors ${step.done ? 'text-emerald-700' : 'text-slate-900 group-hover/step:text-[#41c8df]'}`}>{step.title}</h4>
+                <p className="text-xs lg:text-sm text-slate-500 leading-relaxed font-medium">{step.description}</p>
               </div>
             ))}
           </div>
 
           {/* Recent Course Card */}
           {enrollments.length > 0 && (
-            <div className="mt-12 bg-white border border-slate-200 rounded-[3rem] p-10 shadow-sm relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-8 text-slate-100 group-hover:text-slate-200 transition-colors">
+            <div className="mt-8 lg:mt-12 bg-white border border-slate-200 rounded-[2rem] lg:rounded-[3rem] p-6 lg:p-10 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8 text-slate-100 group-hover:text-slate-200 transition-colors hidden sm:block">
                 <Clock size={40} />
               </div>
               <div className="flex items-center justify-between mb-8">
-                <h3 className="text-xl font-black text-slate-900">Current Progress</h3>
+                <h3 className="text-lg lg:text-xl font-black text-slate-900">Current Progress</h3>
               </div>
-              <div className="flex flex-col sm:flex-row items-center gap-8 relative z-10">
-                <div className="w-32 h-32 rounded-3xl overflow-hidden shrink-0 shadow-xl shadow-slate-200">
+              <div className="flex flex-col md:flex-row items-center gap-6 lg:gap-8 relative z-10">
+                <div className="w-full sm:w-32 h-48 sm:h-32 rounded-2xl lg:rounded-3xl overflow-hidden shrink-0 shadow-xl shadow-slate-200">
                   <img src={enrollments[0].course.image} alt={enrollments[0].course.title} className="w-full h-full object-cover" />
                 </div>
-                <div className="flex-1 text-center sm:text-left">
-                  <h4 className="text-2xl font-black text-slate-900 mb-2">{enrollments[0].course.title}</h4>
-                  <p className="text-slate-500 font-medium mb-6">Level: {enrollments[0].course.level}</p>
+                <div className="flex-1 text-center md:text-left w-full">
+                  <h4 className="text-xl lg:text-2xl font-black text-slate-900 mb-1 lg:mb-2">{enrollments[0].course.title}</h4>
+                  <p className="text-xs lg:text-sm text-slate-500 font-medium mb-4 lg:mb-6 uppercase tracking-widest">Level: {enrollments[0].course.level}</p>
                   <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
                     <motion.div 
                       className="bg-[#41c8df] h-full" 
@@ -173,10 +173,14 @@ const StudentDashboard = ({
                       transition={{ duration: 0.5, ease: "easeOut" }}
                     />
                   </div>
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                    <span>Progress</span>
+                    <span>{enrollments[0].enrollment.progress_percentage}%</span>
+                  </div>
                 </div>
                 <button 
                   onClick={() => onPlayCourse(enrollments[0].course, enrollments[0].enrollment)}
-                  className="px-8 py-5 bg-slate-900 text-white font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-slate-900/10 flex items-center gap-3"
+                  className="w-full md:w-auto px-8 py-4 lg:py-5 bg-slate-900 text-white font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3"
                 >
                   <PlayCircle size={24} />
                   Resume

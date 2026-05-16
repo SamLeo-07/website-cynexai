@@ -23,7 +23,7 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({
   onProgressUpdate
 }) => {
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
 
   const currentLesson = lessons[currentLessonIndex];
@@ -65,11 +65,11 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({
   return (
     <div className="fixed inset-0 z-[150] bg-slate-50 flex flex-col md:flex-row overflow-hidden">
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-200 bg-white">
+      <div className="md:hidden flex items-center justify-between p-3 border-b border-slate-200 bg-white sticky top-0 z-[170]">
         <button onClick={onClose} className="p-2 text-slate-400" title="Close Player">
           <ChevronLeft size={24} />
         </button>
-        <h2 className="text-sm font-black text-slate-900 truncate px-4 tracking-tight">{course.title}</h2>
+        <h2 className="text-xs font-black text-slate-900 truncate px-2 tracking-tight flex-1 text-center">{course.title}</h2>
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-[#41c8df]" title="Toggle Curriculum">
           <Menu size={24} />
         </button>

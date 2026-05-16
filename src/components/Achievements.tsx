@@ -67,12 +67,12 @@ const Achievements = () => {
   }
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-8 lg:space-y-12">
       {/* Level Card */}
-      <div className="bg-gradient-to-br from-[#41c8df]/10 to-white border border-slate-200 rounded-[3rem] p-12 relative overflow-hidden shadow-sm">
+      <div className="bg-gradient-to-br from-[#41c8df]/10 to-white border border-slate-200 rounded-[2rem] lg:rounded-[3rem] p-8 lg:p-12 relative overflow-hidden shadow-sm">
         <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[140%] bg-[#41c8df]/5 blur-[120px] rounded-full" />
         
-        <div className="flex flex-col lg:flex-row items-center gap-12 relative z-10">
+        <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12 relative z-10">
           <div className="w-48 h-48 rounded-full border-8 border-slate-50 flex items-center justify-center relative bg-white shadow-xl shadow-[#41c8df]/10">
             <div className="absolute inset-0 border-8 border-[#41c8df] border-t-transparent rounded-full animate-spin-slow" />
             <div className="text-center">
@@ -81,10 +81,10 @@ const Achievements = () => {
             </div>
           </div>
           
-          <div className="flex-1 space-y-6 text-center lg:text-left">
+          <div className="flex-1 space-y-4 lg:space-y-6 text-center lg:text-left w-full">
             <div>
-              <h2 className="text-4xl font-black text-slate-900 tracking-tight">Skill Progression</h2>
-              <p className="text-slate-500 mt-2 font-medium">Leveling up unlocks premium <span className="text-slate-900 font-black">Certification Paths</span>.</p>
+              <h2 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">Skill Progression</h2>
+              <p className="text-sm lg:text-base text-slate-500 mt-2 font-medium">Leveling up unlocks premium <span className="text-slate-900 font-black">Certification Paths</span>.</p>
             </div>
             <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden">
               <motion.div 

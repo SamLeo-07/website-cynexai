@@ -149,7 +149,7 @@ const StudentPortal = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex selection:bg-[#41c8df]/20">
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row selection:bg-[#41c8df]/20">
       {/* Sidebar Navigation */}
       <aside className="w-80 bg-white border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen pt-24 pb-8">
         <div className="px-6 mb-12">
@@ -189,20 +189,24 @@ const StudentPortal = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-12 relative">
+      <main className="flex-1 min-h-screen pt-20 lg:pt-24 pb-24 lg:pb-12 px-4 sm:px-6 lg:px-12 relative">
         <div className="max-w-6xl mx-auto relative z-10">
-          {/* Mobile Tab Navigation */}
-          <div className="lg:hidden overflow-x-auto pb-6 mb-8 no-scrollbar">
-            <div className="flex gap-2 w-max">
+          {/* Bottom Navigation for Mobile (Replaces the top scroll tabs) */}
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-2 pb-safe">
+            <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
               {navItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id as any)}
-                  className={`px-6 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTab === item.id ? 'bg-[#41c8df] text-black shadow-lg shadow-[#41c8df]/20' : 'bg-white text-slate-500 border border-slate-200'
+                  className={`flex flex-col items-center justify-center gap-1 w-full h-full transition-all ${
+                    activeTab === item.id ? 'text-[#41c8df]' : 'text-slate-400'
                   }`}
+                  title={item.label}
                 >
-                  <item.icon className="w-4 h-4" /> {item.label}
+                  <div className={`p-1.5 rounded-xl transition-all ${activeTab === item.id ? 'bg-[#41c8df]/10' : ''}`}>
+                    <item.icon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-tighter truncate w-full text-center">{item.label.split(' ')[0]}</span>
                 </button>
               ))}
             </div>
@@ -385,16 +389,15 @@ const StudentPortal = () => {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="space-y-8"
                 >
-                  <div className="flex items-center justify-between mb-8">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 lg:mb-12">
                     <div>
-                      <h3 className="text-3xl font-bold text-slate-900">Support Desk</h3>
-                      <p className="text-slate-500 text-sm mt-1">Direct communication with your learning mentors</p>
+                      <h3 className="text-3xl lg:text-4xl font-black text-slate-900 mb-2 tracking-tight">Support Hub</h3>
+                      <p className="text-sm lg:text-base text-slate-500 font-medium">Get technical assistance or academic guidance.</p>
                     </div>
                     <button
                       onClick={() => setIsTicketModalOpen(true)}
-                      className="px-8 py-4 bg-slate-900 text-white font-bold rounded-2xl hover:scale-105 transition-all flex items-center gap-2 shadow-xl shadow-slate-900/20"
+                      className="w-full sm:w-auto px-8 py-4 bg-slate-900 text-white font-bold rounded-2xl hover:scale-105 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20"
                     >
                       <Plus size={20} /> Raise Ticket
                     </button>
@@ -437,9 +440,9 @@ const StudentPortal = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                 >
-                  <div className="mb-12">
-                    <h3 className="text-4xl font-black text-slate-900 mb-2">Explore Our Programs</h3>
-                    <p className="text-slate-500 text-lg">Master the world's most advanced technologies with industry-led certifications.</p>
+                  <div className="mb-8 lg:mb-12">
+                    <h3 className="text-3xl lg:text-4xl font-black text-slate-900 mb-2">Explore Our Programs</h3>
+                    <p className="text-base lg:text-lg text-slate-500 font-medium">Master the world's most advanced technologies with industry-led certifications.</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
