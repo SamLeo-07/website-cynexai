@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { courseData } from './components/CourseDetail'; // Import course data to get the name
+import { getCourses } from './lib/turso';
 
 const ApplicationForm = () => {
   const { courseId } = useParams();
@@ -18,17 +19,49 @@ const ApplicationForm = () => {
   const [message, setMessage] = useState('');
 
   // Find the course name from the imported data
-  const course = courseId ? courseData[courseId as keyof typeof courseData] : null;
-  const courseName = course ? course.title : 'the selected course';
+  const staticCourse = courseId ? courseData[courseId as keyof typeof courseData] : null;
+  const [courseName, setCourseName] = useState(staticCourse ? staticCourse.title : 'the selected course');
+  const [isCourseValid, setIsCourseValid] = useState<boolean | null>(staticCourse ? true : null);
+
+  React.useEffect(() => {
+    if (!courseId) {
+      setIsCourseValid(false);
+      return;
+    }
+    const checkCourse = async () => {
+      try {
+        const all = await getCourses(false);
+        const dbCourse = all.find(c => c.id === courseId);
+        if (dbCourse) {
+          setCourseName(dbCourse.title);
+          setIsCourseValid(true);
+        } else if (!staticCourse) {
+          setIsCourseValid(false);
+        }
+      } catch (e) {
+        console.warn('ApplicationForm: Could not fetch DB override.', e);
+        if (!staticCourse) setIsCourseValid(false);
+      }
+    };
+    checkCourse();
+  }, [courseId, staticCourse]);
+
+  if (isCourseValid === null) {
+    return (
+      <div className="bg-background text-secondary min-h-screen font-sans flex items-center justify-center py-12 px-4">
+        <div className="w-12 h-12 border-4 border-[#41c8df] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   // If the courseId is invalid, show a message and a back button
-  if (!course) {
+  if (isCourseValid === false) {
     return (
       <div className="bg-background text-secondary min-h-screen font-sans flex items-center justify-center py-12 px-4">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-primary mb-4">Invalid Course</h2>
           <p className="text-gray-400 mb-6">The course you are trying to apply for does not exist.</p>
-          <button onClick={() => navigate(-1)} className="bg-primary text-black font-bold py-2 px-4 rounded-lg">Go Back</button>
+          <button onClick={() => navigate(-1)} className="bg-[#41c8df] text-black font-bold py-2 px-4 rounded-lg">Go Back</button>
         </div>
       </div>
     );

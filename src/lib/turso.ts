@@ -34,16 +34,18 @@ export const client = isTursoConfigured
 
 // Circuit Breaker: If connection fails, stop trying to use Turso for this session
 let dbConnectionFailed = false;
+let isInitializing = false;
+let isInitialized = false;
 
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  password_hash?: string;
+  phone?: string;
   role: 'student' | 'admin';
-  joinedAt: string;
-  avatar?: string;
-  batch?: string;
+  created_at?: string;
 }
 
 export interface Post {
@@ -57,16 +59,322 @@ export interface Post {
   date: string;
 }
 
+export interface Course {
+  id: string;
+  title: string;
+  subtitle?: string;
+  description: string;
+  image: string;
+  duration: string;
+  placement?: string;
+  students: string;
+  rating: number;
+  level: string;
+  skills: string;       // JSON string: string[]
+  modules?: string;     // JSON string: string[]
+  outcomes?: string;    // JSON string: string[]
+  prerequisites?: string; // JSON string: string[]
+  career?: string;      // JSON string: string[]
+  isVisible: boolean;
+}
+
 
 
 // --- USER OPERATIONS ---
 
 export const getUsers = async (): Promise<User[]> => {
   if (isTursoConfigured && client) {
-    // TODO: Implement database query when schema is ready
-    return [];
+    try {
+      const result = await client.execute("SELECT * FROM users ORDER BY created_at DESC");
+      return result.rows as unknown as User[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch users", e);
+    }
   }
   return [];
+};
+
+export const createUser = async (user: Omit<User, 'created_at'>) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO users (id, name, email, password_hash, phone, role, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [user.id, user.name, user.email, user.password_hash || '', user.phone || '', user.role || 'student', new Date().toISOString()]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to create user", e);
+      throw e;
+    }
+  }
+};
+
+export const updateUser = async (user: User) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `UPDATE users SET name = ?, email = ?, phone = ?, role = ? WHERE id = ?`,
+        args: [user.name, user.email, user.phone || '', user.role || 'student', user.id]
+      });
+      if (user.password_hash) {
+        await client.execute({
+          sql: `UPDATE users SET password_hash = ? WHERE id = ?`,
+          args: [user.password_hash, user.id]
+        });
+      }
+    } catch (e) {
+      console.error("Deepmind: Failed to update user", e);
+      throw e;
+    }
+  }
+};
+
+export const deleteUser = async (id: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "DELETE FROM users WHERE id = ?",
+        args: [id]
+      });
+      // Cascade delete enrollments and payments if necessary
+      await client.execute({ sql: "DELETE FROM enrollments WHERE student_id = ?", args: [id] });
+      await client.execute({ sql: "DELETE FROM payments WHERE student_id = ?", args: [id] });
+    } catch (e) {
+      console.error("Deepmind: Failed to delete user", e);
+      throw e;
+    }
+  }
+};
+
+// --- ENROLLMENTS & LMS OPERATIONS ---
+
+export interface Enrollment {
+  id: string;
+  student_id: string;
+  course_id: string;
+  progress_percentage: number;
+  status: 'active' | 'completed' | 'suspended';
+}
+
+export const getEnrollmentsByStudent = async (studentId: string): Promise<Enrollment[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute({
+        sql: "SELECT * FROM enrollments WHERE student_id = ?",
+        args: [studentId]
+      });
+      return result.rows as unknown as Enrollment[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch enrollments", e);
+    }
+  }
+  return [];
+};
+
+export const getAllEnrollments = async (): Promise<Enrollment[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute("SELECT * FROM enrollments");
+      return result.rows as unknown as Enrollment[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch all enrollments", e);
+    }
+  }
+  return [];
+};
+
+export const createEnrollment = async (enrollment: Enrollment) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO enrollments (id, student_id, course_id, progress_percentage, status)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [enrollment.id, enrollment.student_id, enrollment.course_id, enrollment.progress_percentage || 0, enrollment.status || 'active']
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to create enrollment", e);
+      throw e;
+    }
+  }
+};
+
+export interface Lesson {
+  id: string;
+  course_id: string;
+  module_name: string;
+  lesson_title: string;
+  video_url: string;
+  order_index: number;
+}
+
+export const getLessonsByCourse = async (courseId: string): Promise<Lesson[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute({
+        sql: "SELECT * FROM lessons WHERE course_id = ? ORDER BY order_index ASC",
+        args: [courseId]
+      });
+      return result.rows as unknown as Lesson[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch lessons", e);
+    }
+  }
+  return [];
+};
+
+export interface OnboardingStep {
+  student_id: string;
+  step_id: string;
+  is_done: boolean;
+}
+
+export const getStudentChecklist = async (studentId: string): Promise<OnboardingStep[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute({
+        sql: "SELECT * FROM onboarding_steps WHERE student_id = ?",
+        args: [studentId]
+      });
+      return result.rows.map(row => ({
+        ...row,
+        is_done: row.is_done === 1
+      })) as unknown as OnboardingStep[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch checklist", e);
+    }
+  }
+  return [];
+};
+
+export const updateChecklistStep = async (studentId: string, stepId: string, isDone: boolean) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "INSERT OR REPLACE INTO onboarding_steps (student_id, step_id, is_done) VALUES (?, ?, ?)",
+        args: [studentId, stepId, isDone ? 1 : 0]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to update checklist", e);
+      throw e;
+    }
+  }
+};
+
+export const updateEnrollmentProgress = async (id: string, progress: number) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "UPDATE enrollments SET progress_percentage = ? WHERE id = ?",
+        args: [progress, id]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to update progress", e);
+      throw e;
+    }
+  }
+};
+
+export interface Payment {
+  id: string;
+  student_id: string;
+  total_amount: number;
+  amount_paid: number;
+  due_date: string;
+  status: 'pending' | 'paid';
+}
+
+export const getPaymentsByStudent = async (studentId: string): Promise<Payment[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute({
+        sql: "SELECT * FROM payments WHERE student_id = ?",
+        args: [studentId]
+      });
+      return result.rows as unknown as Payment[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch payments", e);
+    }
+  }
+  return [];
+};
+
+export const getAllPayments = async (): Promise<Payment[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute("SELECT * FROM payments");
+      return result.rows as unknown as Payment[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch all payments", e);
+    }
+  }
+  return [];
+};
+
+export const createPayment = async (payment: Payment) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO payments (id, student_id, total_amount, amount_paid, due_date, status)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [payment.id, payment.student_id, payment.total_amount, payment.amount_paid, payment.due_date, payment.status]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to create payment", e);
+      throw e;
+    }
+  }
+};
+
+export interface SupportTicket {
+  id: string;
+  student_id: string;
+  category: string;
+  description: string;
+  status: 'open' | 'resolved';
+  created_at: string;
+}
+
+export const getSupportTickets = async (studentId?: string): Promise<SupportTicket[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const sql = studentId ? "SELECT * FROM support_tickets WHERE student_id = ? ORDER BY created_at DESC" : "SELECT * FROM support_tickets ORDER BY created_at DESC";
+      const args = studentId ? [studentId] : [];
+      const result = await client.execute({ sql, args });
+      return result.rows as unknown as SupportTicket[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch tickets", e);
+    }
+  }
+  return [];
+};
+
+export const createSupportTicket = async (ticket: Omit<SupportTicket, 'created_at'>) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO support_tickets (id, student_id, category, description, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [ticket.id, ticket.student_id, ticket.category, ticket.description, ticket.status || 'open', new Date().toISOString()]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to create ticket", e);
+      throw e;
+    }
+  }
+};
+
+export const updateSupportStatus = async (id: string, status: 'open' | 'resolved') => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "UPDATE support_tickets SET status = ? WHERE id = ?",
+        args: [status, id]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to update ticket status", e);
+      throw e;
+    }
+  }
 };
 
 
@@ -172,6 +480,46 @@ export interface LeaderboardEntry {
   problemsSolved: number;
   points: number;
   rank: number;
+}
+
+export interface Badge {
+  id: string;
+  student_id: string;
+  title: string;
+  icon: string;
+  color: string;
+  unlocked_at: string;
+}
+
+export interface JobListing {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  salary: string;
+  description: string;
+  type: 'full-time' | 'part-time' | 'internship';
+  category: string;
+  created_at: string;
+}
+
+export interface MentorshipSession {
+  id: string;
+  student_id: string;
+  mentor_name: string;
+  date: string;
+  time: string;
+  status: 'upcoming' | 'completed' | 'cancelled';
+  meeting_link?: string;
+}
+
+export interface Discussion {
+  id: string;
+  course_id: string;
+  student_id: string;
+  student_name: string;
+  message: string;
+  created_at: string;
 }
 
 const STORAGE_KEY = 'cynexai_blog_posts';
@@ -450,7 +798,11 @@ export const syncSamplePosts = async () => {
 };
 
 export const initTursoDB = async () => {
+  if (isInitialized) return true;
+  if (isInitializing) return true; // Already in progress
+  
   if (isTursoConfigured && client && !dbConnectionFailed) {
+    isInitializing = true;
     try {
       // Create tables if they don't exist
       await client.execute(`
@@ -559,21 +911,166 @@ export const initTursoDB = async () => {
         )
       `);
 
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS courses (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          subtitle TEXT,
+          description TEXT,
+          image TEXT,
+          duration TEXT,
+          placement TEXT,
+          students TEXT,
+          rating REAL,
+          level TEXT,
+          skills TEXT,
+          modules TEXT,
+          outcomes TEXT,
+          prerequisites TEXT,
+          career TEXT,
+          isVisible INTEGER DEFAULT 1
+        )
+      `);
+
+      // LMS / Student Portal Tables
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          phone TEXT,
+          role TEXT DEFAULT 'student',
+          created_at TEXT
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS enrollments (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          course_id TEXT NOT NULL,
+          progress_percentage REAL DEFAULT 0,
+          status TEXT DEFAULT 'active'
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS lessons (
+          id TEXT PRIMARY KEY,
+          course_id TEXT NOT NULL,
+          module_name TEXT,
+          lesson_title TEXT,
+          video_url TEXT,
+          order_index INTEGER DEFAULT 0
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          total_amount REAL,
+          amount_paid REAL DEFAULT 0,
+          due_date TEXT,
+          status TEXT DEFAULT 'pending'
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS support_tickets (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          category TEXT,
+          description TEXT,
+          status TEXT DEFAULT 'open',
+          created_at TEXT
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS badges (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          title TEXT,
+          icon TEXT,
+          color TEXT,
+          unlocked_at TEXT
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS job_listings (
+          id TEXT PRIMARY KEY,
+          title TEXT,
+          company TEXT,
+          location TEXT,
+          salary TEXT,
+          description TEXT,
+          type TEXT,
+          category TEXT,
+          created_at TEXT
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS mentorship_sessions (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          mentor_name TEXT,
+          date TEXT,
+          time TEXT,
+          status TEXT,
+          meeting_link TEXT
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS course_discussions (
+          id TEXT PRIMARY KEY,
+          course_id TEXT NOT NULL,
+          student_id TEXT NOT NULL,
+          student_name TEXT,
+          message TEXT,
+          created_at TEXT
+        )
+      `);
+
+      // Migrate: add new columns to courses table if they don't exist yet
+      const colChecks = ['subtitle', 'placement', 'modules', 'outcomes', 'prerequisites', 'career'];
+      for (const col of colChecks) {
+        try {
+          await client.execute(`ALTER TABLE courses ADD COLUMN ${col} TEXT`);
+        } catch {
+          // Column already exists — ignore
+        }
+      }
+
       // Sync user created content from LocalStorage
       await syncLocalStorageToTurso();
 
       // Sync sample posts securely and robustly
       await syncSamplePosts();
 
+      // Sync sample courses
+      await syncSampleCourses();
+
+      // Sync sample LMS data (jobs, badges, etc.)
+      await syncSampleLMSData();
+
       console.log("Turso Cloud Database Connected and Initialized");
+      isInitialized = true;
       return true;
     } catch (e) {
       console.error("Turso Cloud Initialization Failed (Using Local Fallback):", e);
       dbConnectionFailed = true;
       return false;
+    } finally {
+      isInitializing = false;
     }
   } else {
     console.log("Using LocalStorage fallback for blog posts and mock tests");
+    isInitialized = true;
     return true;
   }
 };
@@ -1090,5 +1587,415 @@ export const clearLocalFallback = () => {
   console.log("Deepmind: Local fallback storage cleared.");
 };
 
+export const syncSampleCourses = async () => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      // Check if courses table is empty
+      const countRes = await client.execute("SELECT COUNT(*) as count FROM courses");
+      const count = Number(countRes.rows[0].count);
+      if (count > 0) return;
+
+      console.log("Deepmind: Syncing sample courses with full detail data...");
+      const sampleCourses = [
+        {
+          id: 'data-science-machine-learning',
+          title: 'Data Science & Machine Learning',
+          subtitle: 'Unlock Insights from Data & Build Predictive Models',
+          description: 'Master data analysis, machine learning algorithms, and AI implementation with our comprehensive Data Science course in Hyderabad. This program is designed for aspiring data scientists looking for the best AI training institute in KPHB.',
+          image: 'https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=800',
+          duration: '6 months',
+          placement: '95%',
+          students: '150+',
+          rating: 4.9,
+          level: 'Intermediate',
+          skills: JSON.stringify(['Python', 'TensorFlow', 'Pandas', 'Scikit-learn', 'NumPy', 'Matplotlib', 'Jupyter', 'SQL', 'Git']),
+          modules: JSON.stringify(['Python Programming Fundamentals', 'Statistics and Probability for Data Science', 'Data Manipulation with Pandas & NumPy', 'Data Visualization with Matplotlib, Seaborn & Plotly', 'Supervised Machine Learning Algorithms', 'Unsupervised Learning and Clustering', 'Deep Learning with TensorFlow & Keras', 'Natural Language Processing (NLP) Basics', 'Model Evaluation, Optimization & Deployment', 'Capstone Project: Real-world Data Science Application']),
+          outcomes: JSON.stringify(['Build end-to-end machine learning pipelines', 'Implement deep learning models for various applications', 'Create interactive data visualizations and dashboards', 'Deploy ML models to production environments', 'Apply AI solutions to complex business problems', 'Interpret and communicate data-driven insights effectively']),
+          prerequisites: JSON.stringify(['Basic programming knowledge (Python preferred)', 'High school level mathematics (algebra, basic calculus)', 'Familiarity with basic statistics concepts']),
+          career: JSON.stringify(['Data Scientist', 'Machine Learning Engineer', 'AI/ML Engineer', 'Data Analyst', 'Business Intelligence Developer']),
+          isVisible: true
+        },
+        {
+          id: 'artificial-intelligence-generative-ai',
+          title: 'Artificial Intelligence & Generative AI',
+          subtitle: 'Innovate with AI-Powered Content and Intelligent Systems',
+          description: 'Deep dive into advanced AI concepts with our Generative AI course in India. This online and classroom training in Hyderabad covers neural networks and cutting-edge generative models to build intelligent systems.',
+          image: 'https://images.pexels.com/photos/8386434/pexels-photo-8386434.jpeg?auto=compress&cs=tinysrgb&w=800',
+          duration: '6 months',
+          placement: '98%',
+          students: '200+',
+          rating: 4.8,
+          level: 'Advanced',
+          skills: JSON.stringify(['Python', 'PyTorch', 'TensorFlow', 'Keras', 'Hugging Face', 'GANs', 'VAEs', 'Diffusion Models', 'NLP']),
+          modules: JSON.stringify(['Introduction to AI & Deep Learning', 'Advanced Neural Network Architectures', 'Generative Adversarial Networks (GANs)', 'Variational Autoencoders (VAEs)', 'Diffusion Models for Image & Video Generation', 'Large Language Models (LLMs) & Transformers', 'Prompt Engineering & Fine-tuning LLMs', 'Ethical AI & Bias in Generative Models', 'Deployment of Generative AI Solutions', 'Final Project: Building a Generative AI Application']),
+          outcomes: JSON.stringify(['Design and implement state-of-the-art AI systems', 'Generate high-quality images, text, and other creative content', 'Master prompt engineering for optimal AI performance', 'Understand and mitigate ethical biases in AI models', 'Deploy advanced AI models to production environments', 'Contribute to innovative AI research and development']),
+          prerequisites: JSON.stringify(['Strong Python programming skills', 'Familiarity with basic machine learning concepts', 'Understanding of linear algebra and calculus']),
+          career: JSON.stringify(['AI Engineer', 'Generative AI Specialist', 'Machine Learning Researcher', 'Prompt Engineer', 'Computer Vision Engineer (Generative)']),
+          isVisible: true
+        },
+        {
+          id: 'full-stack-java-development',
+          title: 'Full Stack Java Development',
+          subtitle: 'Become a Versatile Java Developer for Web & Enterprise',
+          description: 'Enroll in our Full Stack Developer course in India to build robust web applications from frontend to backend. This program in Hyderabad covers Java, Spring Boot, and modern frontend technologies to make you a job-ready developer.',
+          image: '/java.png',
+          duration: '6 months',
+          placement: '92%',
+          students: '120+',
+          rating: 4.7,
+          level: 'Intermediate',
+          skills: JSON.stringify(['Java', 'Spring Boot', 'Spring MVC', 'Hibernate', 'SQL', 'React/Angular', 'JavaScript', 'REST APIs', 'Git', 'Maven/Gradle']),
+          modules: JSON.stringify(['Java Core & OOP', 'Data Structures & Algorithms in Java', 'SQL & Database Management (MySQL/PostgreSQL)', 'Spring Framework (Core, MVC, Security)', 'Spring Boot & Microservices', 'RESTful API Development', 'Frontend Development (HTML, CSS, JavaScript, React/Angular)', 'Version Control with Git', 'Deployment to Cloud (e.g., AWS EC2/Elastic Beanstalk)', 'Full Stack Capstone Project']),
+          outcomes: JSON.stringify(['Develop scalable backend services with Spring Boot', 'Build dynamic and responsive frontend user interfaces', 'Design and manage relational databases', 'Implement secure and robust authentication/authorization', 'Deploy full-stack applications to cloud platforms', 'Work effectively in Agile development environments']),
+          prerequisites: JSON.stringify(['Basic programming knowledge (any language)', 'Understanding of web concepts (HTTP, client-server)', 'Eagerness to learn both frontend and backend']),
+          career: JSON.stringify(['Full Stack Java Developer', 'Backend Java Developer', 'Software Engineer (Java)', 'Spring Boot Developer', 'Enterprise Application Developer']),
+          isVisible: true
+        },
+        {
+          id: 'devops-cloud-technologies',
+          title: 'DevOps & Cloud Technologies',
+          subtitle: 'Streamline Software Delivery with Cloud & Automation',
+          description: 'Our DevOps & Cloud training helps you master cloud infrastructure, CI/CD pipelines, and deployment strategies. Learn how to become a DevOps engineer with hands-on training on AWS, Azure, and other cloud computing certification tools in Hyderabad.',
+          image: '/Devops.png',
+          duration: '6 months',
+          placement: '96%',
+          students: '180+',
+          rating: 4.8,
+          level: 'Intermediate',
+          skills: JSON.stringify(['AWS', 'Azure/GCP', 'Docker', 'Kubernetes', 'Jenkins', 'Terraform', 'Ansible', 'Git', 'Linux', 'Shell Scripting']),
+          modules: JSON.stringify(['Linux Fundamentals & Shell Scripting', 'Introduction to Cloud Computing (AWS Focus)', 'Infrastructure as Code (IaC) with Terraform', 'Containerization with Docker', 'Container Orchestration with Kubernetes', 'CI/CD Pipelines with Jenkins/GitLab CI/GitHub Actions', 'Monitoring and Logging (Prometheus, Grafana, ELK Stack)', 'Networking in Cloud', 'Security in DevOps', 'Project: Deploying a Scalable Application']),
+          outcomes: JSON.stringify(['Automate software build, test, and deployment processes', 'Manage and scale cloud infrastructure efficiently', 'Implement robust CI/CD pipelines', 'Containerize and orchestrate applications', 'Monitor and troubleshoot cloud-native applications', 'Apply security best practices in a DevOps workflow']),
+          prerequisites: JSON.stringify(['Basic understanding of IT operations', 'Familiarity with command line interfaces', 'Some programming experience is beneficial']),
+          career: JSON.stringify(['DevOps Engineer', 'Cloud Engineer', 'Site Reliability Engineer (SRE)', 'Cloud Architect', 'Automation Engineer']),
+          isVisible: true
+        },
+        {
+          id: 'python-programming',
+          title: 'Python Programming',
+          subtitle: 'Master the Versatile Language for Data, Web & Automation',
+          description: 'Master Python fundamentals with our dedicated Python for AI course. This program is perfect for beginners and professionals in Hyderabad looking to build a strong foundation for data analysis, web development, and automation.',
+          image: 'https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=800',
+          duration: '6 months',
+          placement: '90%',
+          students: '250+',
+          rating: 4.7,
+          level: 'Beginner',
+          skills: JSON.stringify(['Python', 'OOP', 'Data Structures', 'Flask/Django (basics)', 'Pandas (basics)', 'API usage', 'Git']),
+          modules: JSON.stringify(['Python Basics & Syntax', 'Data Types & Data Structures', 'Control Flow & Functions', 'Object-Oriented Programming (OOP) in Python', 'File Handling & Error Handling', 'Modules, Packages & Pip', 'Introduction to Web Development with Flask/Django', 'Data Manipulation with Pandas (Intro)', 'Automation & Scripting', 'Final Mini-Projects']),
+          outcomes: JSON.stringify(['Write clean, efficient, and well-structured Python code', 'Automate repetitive tasks with Python scripts', 'Develop basic web applications', 'Perform data manipulation and analysis', 'Solve algorithmic problems using Python', 'Build a strong foundation for advanced Python careers']),
+          prerequisites: JSON.stringify(['No prior programming experience required', 'Basic computer literacy']),
+          career: JSON.stringify(['Python Developer', 'Automation Engineer', 'Junior Data Analyst', 'Web Developer (Python)', 'Software Engineer (Entry-Level)']),
+          isVisible: true
+        },
+        {
+          id: 'software-testing-manual-automation',
+          title: 'Software Testing (Manual + Automation)',
+          subtitle: 'Ensure Quality & Reliability in Software Products',
+          description: 'Master software testing with our comprehensive course covering manual and automation frameworks. This training in KPHB, Hyderabad, prepares you for a successful career in quality assurance with hands-on experience.',
+          image: 'https://images.pexels.com/photos/1181263/pexels-photo-1181263.jpeg?auto=compress&cs=tinysrgb&w=800',
+          duration: '6 months',
+          placement: '91%',
+          students: '140+',
+          rating: 4.5,
+          level: 'Intermediate',
+          skills: JSON.stringify(['Manual Testing', 'Test Case Design', 'Selenium', 'Jira', 'Agile', 'API Testing', 'Java/Python (for automation)', 'SQL']),
+          modules: JSON.stringify(['Software Development Life Cycle (SDLC) & STLC', 'Manual Testing Fundamentals (Types, Techniques)', 'Test Case Design & Execution', 'Defect Reporting & Management (Jira)', 'Agile Testing Principles', 'Introduction to Automation Testing', 'Selenium WebDriver with Java/Python', 'TestNG/Pytest Frameworks', 'API Testing with Postman/Rest Assured', 'Performance Testing Basics (JMeter)']),
+          outcomes: JSON.stringify(['Design comprehensive test plans and strategies', 'Execute manual tests and report defects effectively', 'Automate web and API test cases using industry tools', 'Participate in Agile development cycles as a QA', 'Ensure high-quality software releases', 'Understand different types of software testing']),
+          prerequisites: JSON.stringify(['Basic computer knowledge and analytical skills', 'Familiarity with web applications is a plus', 'No prior coding experience required for manual section']),
+          career: JSON.stringify(['QA Engineer', 'Manual Tester', 'Automation Test Engineer', 'Software Test Lead', 'Performance Tester']),
+          isVisible: true
+        },
+        {
+          id: 'sap-data-processing',
+          title: 'SAP (Systems, Applications, and Products in Data Processing)',
+          subtitle: 'Master Enterprise Resource Planning with SAP Solutions',
+          description: 'Learn enterprise resource planning with our expert-led SAP training in Hyderabad. This course covers key SAP modules, business process optimization, and implementation strategies for various industries.',
+          image: 'https://images.pexels.com/photos/1181316/pexels-photo-1181316.jpeg?auto=compress&cs=tinysrgb&w=800',
+          duration: '6 months',
+          placement: '94%',
+          students: '90+',
+          rating: 4.6,
+          level: 'Professional',
+          skills: JSON.stringify(['SAP HANA', 'ABAP', 'Fiori', 'S/4HANA', 'ERP Concepts', 'SAP Modules (FI, CO, MM, SD)', 'Business Process Optimization']),
+          modules: JSON.stringify(['Introduction to SAP & ERP Concepts', 'SAP ABAP Programming (Fundamentals)', 'SAP Financial Accounting (FI)', 'SAP Controlling (CO)', 'SAP Materials Management (MM)', 'SAP Sales and Distribution (SD)', 'SAP HANA Overview', 'SAP Fiori & UI5 Basics', 'SAP Implementation Methodologies (ASAP/Activate)', 'Case Study & Project']),
+          outcomes: JSON.stringify(['Navigate and operate within the SAP system', 'Understand key SAP modules and their integration', 'Develop custom reports and programs using ABAP', 'Participate in SAP implementation and support projects', 'Optimize business processes using SAP functionalities', 'Gain expertise in a high-demand enterprise technology']),
+          prerequisites: JSON.stringify(['Basic understanding of business processes', 'Familiarity with IT systems is beneficial', 'No prior SAP experience required']),
+          career: JSON.stringify(['SAP Consultant (Functional/Technical)', 'SAP Analyst', 'ERP Specialist', 'SAP Business Process Analyst', 'SAP Basis Administrator (Entry-Level)']),
+          isVisible: true
+        }
+      ];
+
+      for (const course of sampleCourses) {
+        await client.execute({
+          sql: `INSERT OR REPLACE INTO courses 
+                (id, title, subtitle, description, image, duration, placement, students, rating, level, skills, modules, outcomes, prerequisites, career, isVisible) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            course.id, course.title, course.subtitle, course.description,
+            course.image, course.duration, course.placement, course.students,
+            course.rating, course.level, course.skills, course.modules,
+            course.outcomes, course.prerequisites, course.career,
+            course.isVisible ? 1 : 0
+          ]
+        });
+      }
+      console.log("Deepmind: Sample courses synced successfully with full detail data");
+    } catch (e) {
+      console.error("Deepmind: Failed to sync sample courses:", e);
+    }
+  }
+};
+
 export const initBlogDB = initTursoDB; // Alias for backward compatibility
 
+// --- COURSE OPERATIONS ---
+
+export const getCourses = async (includeHidden: boolean = false): Promise<Course[]> => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await initTursoDB();
+      const query = includeHidden 
+        ? "SELECT * FROM courses ORDER BY title ASC" 
+        : "SELECT * FROM courses WHERE isVisible = 1 ORDER BY title ASC";
+      
+      const result = await client.execute(query);
+      return result.rows.map(row => ({
+        id: row.id as string,
+        title: row.title as string,
+        subtitle: (row.subtitle as string) || '',
+        description: row.description as string,
+        image: row.image as string,
+        duration: row.duration as string,
+        placement: (row.placement as string) || '',
+        students: row.students as string,
+        rating: Number(row.rating),
+        level: row.level as string,
+        skills: row.skills as string,
+        modules: (row.modules as string) || '[]',
+        outcomes: (row.outcomes as string) || '[]',
+        prerequisites: (row.prerequisites as string) || '[]',
+        career: (row.career as string) || '[]',
+        isVisible: row.isVisible === 1
+      })) as unknown as Course[];
+    } catch (e) {
+      console.error("Deepmind: Failed to get courses from Turso:", e);
+    }
+  }
+  
+  return [];
+};
+
+export const createCourse = async (course: Course) => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await initTursoDB();
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO courses 
+              (id, title, subtitle, description, image, duration, placement, students, rating, level, skills, modules, outcomes, prerequisites, career, isVisible) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          course.id,
+          course.title,
+          course.subtitle || '',
+          course.description,
+          course.image,
+          course.duration,
+          course.placement || '',
+          course.students,
+          course.rating,
+          course.level,
+          course.skills,
+          course.modules || '[]',
+          course.outcomes || '[]',
+          course.prerequisites || '[]',
+          course.career || '[]',
+          course.isVisible ? 1 : 0
+        ]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to create course in Turso:", e);
+      throw e;
+    }
+  }
+};
+
+export const updateCourse = async (course: Partial<Course> & { id: string }) => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      const sets: string[] = [];
+      const args: (string | number | null)[] = [];
+
+      Object.entries(course).forEach(([key, value]) => {
+        if (key !== 'id') {
+          sets.push(`${key} = ?`);
+          args.push(key === 'isVisible' ? (value ? 1 : 0) : value as string | number | null);
+        }
+      });
+
+      args.push(course.id);
+      await client.execute({
+        sql: `UPDATE courses SET ${sets.join(', ')} WHERE id = ?`,
+        args
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to update course in Turso:", e);
+      throw e;
+    }
+  }
+};
+
+export const deleteCourse = async (id: string) => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await client.execute({
+        sql: "DELETE FROM courses WHERE id = ?",
+        args: [id]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to delete course in Turso:", e);
+      throw e;
+    }
+  }
+};
+
+export const toggleCourseVisibility = async (id: string, isVisible: boolean) => {
+  return updateCourse({ id, isVisible });
+};
+
+const syncSampleLMSData = async () => {
+  if (isTursoConfigured && client) {
+    try {
+      // Seed Jobs
+      const jobsCheck = await client.execute("SELECT count(*) as count FROM job_listings");
+      if (Number(jobsCheck.rows[0].count) === 0) {
+        const sampleJobs = [
+          { id: 'job_1', title: 'AI Systems Architect', company: 'Google Deepmind', location: 'London, UK', salary: '$160k - $220k', type: 'Full-time', category: 'Artificial Intelligence' },
+          { id: 'job_2', title: 'Senior Java Developer', company: 'Amazon', location: 'Hyderabad, IN', salary: '₹25 - 45 LPA', type: 'Full-time', category: 'Software Engineering' },
+          { id: 'job_3', title: 'MLOps Engineer', company: 'OpenAI', location: 'San Francisco, CA', salary: '$180k - $250k', type: 'Remote', category: 'Data Science' },
+          { id: 'job_4', title: 'Junior Frontend Engineer', company: 'CynexAI', location: 'Bangalore, IN', salary: '₹12 - 18 LPA', type: 'Hybrid', category: 'Web Development' }
+        ];
+
+        for (const job of sampleJobs) {
+          await client.execute({
+            sql: `INSERT INTO job_listings (id, title, company, location, salary, description, type, category, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [job.id, job.title, job.company, job.location, job.salary, 'Sample job description', job.type, job.category, new Date().toISOString()]
+          });
+        }
+      }
+
+      // Seed default badges for the first student if any
+      const studentsCheck = await client.execute("SELECT id FROM students LIMIT 1");
+      if (studentsCheck.rows.length > 0) {
+        const studentId = studentsCheck.rows[0].id as string;
+        const badgesCheck = await client.execute({
+          sql: "SELECT count(*) as count FROM badges WHERE student_id = ?",
+          args: [studentId]
+        });
+        if (Number(badgesCheck.rows[0].count) === 0) {
+          const sampleBadges = [
+            { id: 'b1', title: 'Alpha Protocol', icon: 'Zap', color: 'text-yellow-400' },
+            { id: 'b2', title: 'Code Vanguard', icon: 'Rocket', color: 'text-[#41c8df]' }
+          ];
+          for (const b of sampleBadges) {
+            await client.execute({
+              sql: "INSERT INTO badges (id, student_id, title, icon, color, unlocked_at) VALUES (?, ?, ?, ?, ?, ?)",
+              args: [crypto.randomUUID(), studentId, b.title, b.icon, b.color, new Date().toISOString()]
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to sync sample LMS data", e);
+    }
+  }
+};
+
+// --- ADVANCED LMS FEATURES ---
+
+export const getBadges = async (studentId: string): Promise<Badge[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute({
+        sql: "SELECT * FROM badges WHERE student_id = ? ORDER BY unlocked_at DESC",
+        args: [studentId]
+      });
+      return result.rows as unknown as Badge[];
+    } catch (e) {
+      console.error("Failed to fetch badges", e);
+    }
+  }
+  return [];
+};
+
+export const getJobListings = async (): Promise<JobListing[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute("SELECT * FROM job_listings ORDER BY created_at DESC");
+      return result.rows as unknown as JobListing[];
+    } catch (e) {
+      console.error("Failed to fetch jobs", e);
+    }
+  }
+  return [];
+};
+
+export const getMentorshipSessions = async (studentId: string): Promise<MentorshipSession[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute({
+        sql: "SELECT * FROM mentorship_sessions WHERE student_id = ? ORDER BY date DESC",
+        args: [studentId]
+      });
+      return result.rows as unknown as MentorshipSession[];
+    } catch (e) {
+      console.error("Failed to fetch mentorship sessions", e);
+    }
+  }
+  return [];
+};
+
+export const bookMentorship = async (session: MentorshipSession) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO mentorship_sessions (id, student_id, mentor_name, date, time, status, meeting_link)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [session.id, session.student_id, session.mentor_name, session.date, session.time, session.status, session.meeting_link || '']
+      });
+    } catch (e) {
+      console.error("Failed to book mentorship", e);
+      throw e;
+    }
+  }
+};
+
+export const getDiscussions = async (courseId: string): Promise<Discussion[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute({
+        sql: "SELECT * FROM course_discussions WHERE course_id = ? ORDER BY created_at ASC",
+        args: [courseId]
+      });
+      return result.rows as unknown as Discussion[];
+    } catch (e) {
+      console.error("Failed to fetch discussions", e);
+    }
+  }
+  return [];
+};
+
+export const createDiscussion = async (discussion: Discussion) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT INTO course_discussions (id, course_id, student_id, student_name, message, created_at)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [discussion.id, discussion.course_id, discussion.student_id, discussion.student_name, discussion.message, new Date().toISOString()]
+      });
+    } catch (e) {
+      console.error("Failed to create discussion", e);
+      throw e;
+    }
+  }
+};

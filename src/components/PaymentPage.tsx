@@ -5,20 +5,25 @@ import { X, Smartphone, RefreshCcw, Copy } from 'lucide-react'; // Added Copy ic
 
 import { useNavigate } from 'react-router-dom';
 
-// Define courses - Ensure this data is always valid
-const coursesData = [
-  { id: 'DSB001', name: 'Data Science & Machine Learning' },
-  { id: 'AIML002', name: 'Artificial Intelligence & Generative AI' },
-  { id: 'FSD003', name: 'Full Stack Java Development' },
-  { id: 'DEV004', name: 'DevOps & Cloud Technologies' },
-  { id: 'PYT005', name: 'Python Programming' },
-  { id: 'SWT006', name: 'Software Testing (Manual + Automation)' },
-  { id: 'SAP007', name: 'SAP (Data Processing)' },
-  { id: 'OTHER', name: 'Other / Custom Payment' }
-];
+import { getCourses, Course } from '../lib/turso';
 
 const PaymentPage = () => {
   const [inViewRef, inView] = useInView({ triggerOnce: true, threshold: 0.1 });
+  const [coursesData, setCoursesData] = useState<Pick<Course, 'id' | 'title'>[]>([]);
+  
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const data = await getCourses();
+        const mapped = data.map(c => ({ id: c.id, title: c.title }));
+        setCoursesData([...mapped, { id: 'OTHER', title: 'Other / Custom Payment' }]);
+      } catch (err) {
+        console.error('Failed to fetch courses for payment:', err);
+        setCoursesData([{ id: 'OTHER', title: 'Other / Custom Payment' }]);
+      }
+    };
+    fetchCourses();
+  }, []);
 
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
@@ -49,7 +54,7 @@ const PaymentPage = () => {
     setInternalOrderId(generateNewOrderId());
   }, []);
 
-  const selectedCourseName = coursesData.find(course => course.id === checkoutDetails.selectedCourseId)?.name || 'N/A';
+  const selectedCourseName = coursesData.find(course => course.id === checkoutDetails.selectedCourseId)?.title || 'N/A';
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -299,7 +304,7 @@ const PaymentPage = () => {
                   <option value="" className="bg-gray-900">-- Select a Course --</option>
                   {coursesData.map(course => (
                     <option key={course.id} value={course.id} className="bg-gray-900">
-                      {course.name}
+                      {course.title}
                     </option>
                   ))}
                 </select>

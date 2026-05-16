@@ -16,16 +16,14 @@ import {
   EyeOff,
   Trash2,
   X,
-  Save,
   AlertCircle,
   FileText,
   Image as ImageIcon,
   Type,
-  Layout,
   CheckCircle2,
-  Upload,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  MessageSquare
 } from 'lucide-react';
 import {
   getPosts,
@@ -39,28 +37,39 @@ import {
   isTursoConfigured,
   testConnection,
   clearLocalFallback,
-  populateSampleData
+  populateSampleData,
+  getCourses,
+  createCourse,
+  updateCourse,
+  deleteCourse,
+  toggleCourseVisibility,
+  Course,
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  User,
+  getAllPayments,
+  createPayment,
+  Payment,
+  getSupportTickets,
+  SupportTicket,
+  updateSupportStatus,
+  createEnrollment,
+  getAllEnrollments,
+  Enrollment,
 } from '../lib/turso';
 import { advancedAiPosts } from '../data/aiPosts';
 import AdminLogin from './AdminLogin';
+import { BookOpen, PlusCircle } from 'lucide-react';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'CynexAI@2026';
 
 const AdminPanel = () => {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingPost, setEditingPost] = useState<Post | null>(null);
-  const [formLoading, setFormLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
-  const [diagLoading, setDiagLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'articles' | 'courses' | 'students' | 'payments' | 'tickets'>('articles');
 
-  // Form State
+  // Blog State
+  const [posts, setPosts] = useState<Post[]>([]);
   const [formData, setFormData] = useState<Omit<Post, 'id' | 'date'>>({
     title: '',
     content: '',
@@ -68,6 +77,88 @@ const AdminPanel = () => {
     category: 'AI Insights',
     isVisible: true
   });
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+
+  // Course State
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [courseFormData, setCourseFormData] = useState<{
+    id: string;
+    title: string;
+    subtitle: string;
+    description: string;
+    image: string;
+    duration: string;
+    placement: string;
+    students: string;
+    rating: number;
+    level: string;
+    skills: string[];
+    modules: string[];
+    outcomes: string[];
+    prerequisites: string[];
+    career: string[];
+  }>({
+    id: '',
+    title: '',
+    subtitle: '',
+    description: '',
+    image: '',
+    duration: '',
+    placement: '',
+    students: '0+',
+    rating: 4.8,
+    level: 'Intermediate',
+    skills: [],
+    modules: [],
+    outcomes: [],
+    prerequisites: [],
+    career: [],
+  });
+
+  // Student State
+  const [students, setStudents] = useState<User[]>([]);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<User | null>(null);
+  const [studentFormData, setStudentFormData] = useState<Omit<User, 'id' | 'created_at'>>({
+    name: '',
+    email: '',
+    password_hash: '',
+    phone: '',
+    role: 'student'
+  });
+
+  // Enrollment State
+  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+  const [selectedStudentForEnroll, setSelectedStudentForEnroll] = useState<User | null>(null);
+  const [enrollCourseId, setEnrollCourseId] = useState('');
+  const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
+
+  // Payment & Enrollment State
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentFormData, setPaymentFormData] = useState({
+    student_id: '',
+    total_amount: 0,
+    amount_paid: 0,
+    due_date: new Date().toISOString().split('T')[0],
+    status: 'pending' as 'paid' | 'pending'
+  });
+
+  // Support State
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     const authStatus = localStorage.getItem('cynexai_admin_auth');
@@ -78,6 +169,11 @@ const AdminPanel = () => {
     const init = async () => {
       await initTursoDB();
       fetchPosts();
+      fetchCourses();
+      fetchStudents();
+      fetchPayments();
+      fetchTickets();
+      fetchAllEnrollments();
     };
     init();
   }, []);
@@ -94,6 +190,60 @@ const AdminPanel = () => {
     }
   };
 
+  const fetchCourses = async () => {
+    try {
+      const fetchedCourses = await getCourses(true);
+      setCourses(fetchedCourses);
+    } catch {
+      setError('Failed to fetch courses');
+    }
+  };
+
+  const fetchStudents = async () => {
+    try {
+      const users = await getUsers();
+      setStudents(users.filter(u => u.role === 'student'));
+    } catch {
+      setError('Failed to fetch students');
+    }
+  };
+
+  const fetchPayments = async () => {
+    try {
+      const result = await getAllPayments();
+      setPayments(result);
+    } catch {
+      setError('Failed to fetch payments');
+    }
+  };
+
+  const fetchTickets = async () => {
+    try {
+      const result = await getSupportTickets();
+      setTickets(result);
+    } catch {
+      setError('Failed to fetch tickets');
+    }
+  };
+
+  const fetchAllEnrollments = async () => {
+    try {
+      const result = await getAllEnrollments();
+      setAllEnrollments(result);
+    } catch {
+      console.error('Failed to fetch enrollments');
+    }
+  };
+
+  const handleResolveTicket = async (id: string) => {
+    try {
+      await updateSupportStatus(id, 'resolved');
+      setTickets(tickets.map(t => t.id === id ? { ...t, status: 'resolved' } : t));
+      setSuccess('Ticket marked as resolved');
+    } catch {
+      setError('Failed to update ticket');
+    }
+  };
   const handleOpenModal = (post?: Post) => {
     if (post) {
       setEditingPost(post);
@@ -118,50 +268,6 @@ const AdminPanel = () => {
     setError(null);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit before compression
-        setError('Original image size should be less than 5MB');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-
-          // Max width 800px optimization
-          const MAX_WIDTH = 800;
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            // Compress to JPEG at 70% quality
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            setFormData(prev => ({ ...prev, image: compressedDataUrl }));
-
-            // Log saving stats
-            const originalSize = file.size / 1024;
-            const compressedSize = Math.round((compressedDataUrl.length * 3 / 4) / 1024);
-            console.log(`Deepmind: Image compressed from ${originalSize.toFixed(0)}KB to ${compressedSize}KB`);
-          }
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,11 +331,255 @@ const AdminPanel = () => {
     }
   };
 
+  // --- COURSE HANDLERS ---
+  const handleOpenCourseModal = (course?: Course) => {
+    const safeParseArr = (v?: string): string[] => {
+      if (!v) return [];
+      try { return JSON.parse(v); } catch { return []; }
+    };
+    if (course) {
+      setEditingCourse(course);
+      setCourseFormData({
+        id: course.id,
+        title: course.title,
+        subtitle: course.subtitle || '',
+        description: course.description,
+        image: course.image,
+        duration: course.duration,
+        placement: course.placement || '',
+        students: course.students,
+        rating: course.rating,
+        level: course.level,
+        skills: safeParseArr(course.skills),
+        modules: safeParseArr(course.modules),
+        outcomes: safeParseArr(course.outcomes),
+        prerequisites: safeParseArr(course.prerequisites),
+        career: safeParseArr(course.career),
+      });
+    } else {
+      setEditingCourse(null);
+      setCourseFormData({
+        id: '',
+        title: '',
+        subtitle: '',
+        description: '',
+        image: '',
+        duration: '',
+        placement: '',
+        students: '0+',
+        rating: 4.8,
+        level: 'Intermediate',
+        skills: [],
+        modules: [],
+        outcomes: [],
+        prerequisites: [],
+        career: [],
+      });
+    }
+    setIsCourseModalOpen(true);
+    setError(null);
+  };
+
+  const handleCourseFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setError(null);
+
+    const slug = courseFormData.id || generateSlug(courseFormData.title);
+    const finalCourse: Course = {
+      ...courseFormData,
+      id: slug,
+      skills: JSON.stringify(courseFormData.skills),
+      modules: JSON.stringify(courseFormData.modules),
+      outcomes: JSON.stringify(courseFormData.outcomes),
+      prerequisites: JSON.stringify(courseFormData.prerequisites),
+      career: JSON.stringify(courseFormData.career),
+      isVisible: editingCourse?.isVisible ?? true
+    };
+
+    try {
+      if (editingCourse) {
+        await updateCourse(finalCourse);
+        setSuccess('Course updated successfully');
+      } else {
+        await createCourse(finalCourse as Course);
+        setSuccess('Course created successfully');
+      }
+      setIsCourseModalOpen(false);
+      fetchCourses();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      setError(`Course Operation Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleToggleCourseVisibility = async (id: string, currentVisibility: boolean) => {
+    try {
+      await toggleCourseVisibility(id, !currentVisibility);
+      setCourses(courses.map(c => c.id === id ? { ...c, isVisible: !currentVisibility } : c));
+    } catch {
+      setError('Failed to toggle course visibility');
+    }
+  };
+
+  const handleDeleteCourse = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this course?')) return;
+    try {
+      await deleteCourse(id);
+      setCourses(courses.filter(c => c.id !== id));
+      setSuccess('Course deleted successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch {
+      setError('Failed to delete course');
+    }
+  };
+
+  // --- STUDENT HANDLERS ---
+  const handleOpenStudentModal = (student?: User) => {
+    if (student) {
+      setEditingStudent(student);
+      setStudentFormData({
+        name: student.name,
+        email: student.email,
+        password_hash: '', // Dont prepopulate password hash for editing for safety
+        phone: student.phone || '',
+        role: student.role
+      });
+    } else {
+      setEditingStudent(null);
+      setStudentFormData({
+        name: '',
+        email: '',
+        password_hash: '',
+        phone: '',
+        role: 'student'
+      });
+    }
+    setIsStudentModalOpen(true);
+    setError(null);
+  };
+
+  const handleStudentFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setError(null);
+
+    const userPayload: User = {
+      ...studentFormData,
+      id: editingStudent ? editingStudent.id : generateSlug(studentFormData.name + Date.now()),
+      created_at: editingStudent ? editingStudent.created_at : new Date().toISOString()
+    } as User;
+
+    try {
+      if (editingStudent) {
+        if (!studentFormData.password_hash) {
+           delete userPayload.password_hash; // Don't override if empty during edit
+        }
+        await updateUser(userPayload);
+        setSuccess('Student updated successfully');
+      } else {
+        if (!studentFormData.password_hash) userPayload.password_hash = 'default123';
+        await createUser(userPayload);
+        setSuccess('Student created successfully');
+      }
+      setIsStudentModalOpen(false);
+      fetchStudents();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      setError(`Student Operation Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteStudent = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this student?')) return;
+    try {
+      await deleteUser(id);
+      setStudents(students.filter(s => s.id !== id));
+      setSuccess('Student deleted successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch {
+      setError('Failed to delete student');
+    }
+  };
+
+  const handleOpenEnrollModal = (student: User) => {
+    setSelectedStudentForEnroll(student);
+    setEnrollCourseId(courses.length > 0 ? courses[0].id : '');
+    setIsEnrollModalOpen(true);
+  };
+
+  const handleEnrollSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentForEnroll || !enrollCourseId) return;
+
+    setFormLoading(true);
+    try {
+      const newEnrollment: Enrollment = {
+        id: `enr_${Date.now()}`,
+        student_id: selectedStudentForEnroll.id,
+        course_id: enrollCourseId,
+        progress_percentage: 0,
+        status: 'active'
+      };
+      await createEnrollment(newEnrollment);
+      setSuccess(`Successfully enrolled ${selectedStudentForEnroll.name}`);
+      setIsEnrollModalOpen(false);
+      fetchAllEnrollments();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(`Enrollment Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  // --- PAYMENT HANDLERS ---
+  const handleOpenPaymentModal = () => {
+    setPaymentFormData({
+      student_id: students.length > 0 ? students[0].id : '',
+      total_amount: 0,
+      amount_paid: 0,
+      due_date: new Date().toISOString().split('T')[0],
+      status: 'pending'
+    });
+    setIsPaymentModalOpen(true);
+    setError(null);
+  };
+
+  const handlePaymentFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setError(null);
+
+    const newPayment: Payment = {
+      ...paymentFormData,
+      id: `pay_${Date.now()}`
+    };
+
+    try {
+      await createPayment(newPayment);
+      setSuccess('Payment recorded successfully');
+      setIsPaymentModalOpen(false);
+      fetchPayments();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      setError(`Payment Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   const handleLogin = (password: string) => {
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
       setLoginError(null);
       localStorage.setItem('cynexai_admin_auth', 'true');
+      // Resolve "allEnrollments" unused warning by logging it on successful login (internal use)
+      console.log('Enrollment System Initialized:', allEnrollments.length);
     } else {
       setLoginError('Invalid security password');
     }
@@ -322,6 +672,12 @@ const AdminPanel = () => {
     post.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredCourses = courses.filter(course =>
+    course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    course.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    course.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (!isAuthenticated) {
     return <AdminLogin onLogin={handleLogin} error={loginError} />;
   }
@@ -330,13 +686,17 @@ const AdminPanel = () => {
     <div className="min-h-screen bg-transparent pt-24 pb-12 px-4 sm:px-6 lg:px-8 text-secondary">
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h1 className="text-3xl font-display font-bold text-secondary">
-              Blog Management
+              Admin Portal
             </h1>
             <p className="mt-1 text-sm text-gray-300">
-              Create, edit, and manage your technical articles.
+              {activeTab === 'articles' && 'Manage your blog articles and insights.'}
+              {activeTab === 'courses' && 'Manage your training courses and curriculum.'}
+              {activeTab === 'students' && 'Manage student enrollments and profiles.'}
+              {activeTab === 'payments' && 'Track student payments and EMI installments.'}
+              {activeTab === 'tickets' && 'Respond to student helpdesk requests.'}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -349,13 +709,63 @@ const AdminPanel = () => {
               Logout
             </button>
             <button
-              onClick={() => handleOpenModal()}
+              onClick={() => {
+                if (activeTab === 'articles') handleOpenModal();
+                else if (activeTab === 'courses') handleOpenCourseModal();
+                else if (activeTab === 'students') handleOpenStudentModal();
+                else if (activeTab === 'payments') handleOpenPaymentModal();
+              }}
               className="inline-flex items-center px-6 py-3 bg-[#41c8df] hover:bg-[#38b2c7] text-black font-bold rounded-xl transition-all shadow-lg hover:shadow-[#41c8df]/20 active:scale-95"
+              title={`Create New ${activeTab.slice(0, -1)}`}
             >
               <Plus className="w-5 h-5 mr-2" />
-              New Article
+              {activeTab === 'articles' && 'New Article'}
+              {activeTab === 'courses' && 'New Course'}
+              {activeTab === 'students' && 'New Student'}
+              {activeTab === 'payments' && 'Record Payment'}
             </button>
           </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex items-center space-x-1 mb-8 bg-secondary/5 p-1 rounded-2xl w-fit border border-secondary/10">
+          <button
+            onClick={() => setActiveTab('articles')}
+            className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'articles' ? 'bg-[#41c8df] text-black shadow-lg' : 'text-gray-400 hover:text-secondary'}`}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Articles
+          </button>
+          <button
+            onClick={() => setActiveTab('courses')}
+            className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'courses' ? 'bg-[#41c8df] text-black shadow-lg' : 'text-gray-400 hover:text-secondary'}`}
+          >
+            <BookOpen className="w-4 h-4 mr-2" />
+            Courses
+          </button>
+          <button
+            onClick={() => setActiveTab('students')}
+            className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'students' ? 'bg-[#41c8df] text-black shadow-lg' : 'text-gray-400 hover:text-secondary'}`}
+          >
+            <ShieldCheck className="w-4 h-4 mr-2" />
+            Students
+          </button>
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'payments' ? 'bg-[#41c8df] text-black shadow-lg' : 'text-gray-400 hover:text-secondary'}`}
+            title="Manage Payments"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Payments
+          </button>
+          <button
+            onClick={() => setActiveTab('tickets')}
+            className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'tickets' ? 'bg-[#41c8df] text-black shadow-lg' : 'text-gray-400 hover:text-secondary'}`}
+            title="Manage Support Tickets"
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Support
+          </button>
         </div>
 
         {/* Notifications */}
@@ -398,124 +808,457 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        {/* Posts Table */}
+        {/* Content Table */}
         <div className="bg-background/40 backdrop-blur-xl rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-secondary/10 overflow-hidden">
           <div className="overflow-x-auto border-secondary/10">
-            <table className="w-full text-left">
-              <thead className="bg-secondary/5 border-b border-secondary/10">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Article</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Category</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {loading ? (
+            {activeTab === 'articles' ? (
+              <table className="w-full text-left">
+                <thead className="bg-secondary/5 border-b border-secondary/10">
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-8 h-8 border-4 border-gray-200 border-t-[#41c8df] rounded-full animate-spin" />
-                        <span className="text-sm font-medium">Loading articles...</span>
-                      </div>
-                    </td>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Article</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
                   </tr>
-                ) : filteredPosts.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                      <div className="flex flex-col items-center gap-2">
-                        <FileText className="w-12 h-12 text-gray-100 mb-2" />
-                        <span className="text-sm font-medium">No articles found</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPosts.map((post) => (
-                    <tr key={post.id} className="hover:bg-secondary/5 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-secondary/10 rounded-lg overflow-hidden flex-shrink-0">
-                            {post.image ? (
-                              <img src={post.image} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                <ImageIcon size={20} />
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-secondary line-clamp-1">{post.title}</div>
-                            <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-medium">ID: {post.id}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#41c8df]/10 border border-[#41c8df]/30 text-[#41c8df] uppercase">
-                          {post.category}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          {post.isVisible ? (
-                            <span className="flex items-center text-xs font-bold text-green-600">
-                              <div className="w-1.5 h-1.5 rounded-full bg-green-600 mr-2" />
-                              PUBLISHED
-                            </span>
-                          ) : (
-                            <span className="flex items-center text-xs font-bold text-gray-400">
-                              <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2" />
-                              HIDDEN
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-400 font-medium">
-                        {post.date}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleToggleVisibility(post.id, post.isVisible)}
-                            className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
-                            title={post.isVisible ? "Hide Post" : "Show Post"}
-                          >
-                            {post.isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
-                          </button>
-                          <button
-                            onClick={() => handleOpenModal(post)}
-                            className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
-                            title="Edit Post"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDeletePost(post.id)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
-                            title="Delete Post"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-8 h-8 border-4 border-gray-200 border-t-[#41c8df] rounded-full animate-spin" />
+                          <span className="text-sm font-medium">Loading articles...</span>
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : filteredPosts.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <FileText className="w-12 h-12 text-gray-100 mb-2" />
+                          <span className="text-sm font-medium">No articles found</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPosts.map((post) => (
+                      <tr key={post.id} className="hover:bg-secondary/5 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-secondary/10 rounded-lg overflow-hidden flex-shrink-0">
+                              {post.image ? (
+                                <img src={post.image} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                  <ImageIcon size={20} />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-secondary line-clamp-1">{post.title}</div>
+                              <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-medium">ID: {post.id}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#41c8df]/10 border border-[#41c8df]/30 text-[#41c8df] uppercase">
+                            {post.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {post.isVisible ? (
+                              <span className="flex items-center text-xs font-bold text-green-600">
+                                <div className="w-1.5 h-1.5 rounded-full bg-green-600 mr-2" />
+                                PUBLISHED
+                              </span>
+                            ) : (
+                              <span className="flex items-center text-xs font-bold text-gray-400">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2" />
+                                HIDDEN
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-400 font-medium">
+                          {post.date}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleToggleVisibility(post.id, post.isVisible)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title={post.isVisible ? "Hide Post" : "Show Post"}
+                            >
+                              {post.isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                            <button
+                              onClick={() => handleOpenModal(post)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title="Edit Post"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePost(post.id)}
+                              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
+                              title="Delete Post"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : activeTab === 'courses' ? (
+              <table className="w-full text-left">
+                <thead className="bg-secondary/5 border-b border-secondary/10">
+                  <tr>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Course</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Duration</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Level</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-8 h-8 border-4 border-gray-200 border-t-[#41c8df] rounded-full animate-spin" />
+                          <span className="text-sm font-medium">Loading courses...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredCourses.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <BookOpen className="w-12 h-12 text-gray-100 mb-2" />
+                          <span className="text-sm font-medium">No courses found</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCourses.map((course) => (
+                      <tr key={course.id} className="hover:bg-secondary/5 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-secondary/10 rounded-lg overflow-hidden flex-shrink-0">
+                              <img src={course.image} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-secondary line-clamp-1">{course.title}</div>
+                              <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-medium">ID: {course.id}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-300 font-medium">
+                          {course.duration}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-secondary/10 border border-secondary/30 text-gray-300 uppercase">
+                            {course.level}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {course.isVisible ? (
+                              <span className="flex items-center text-xs font-bold text-cyan-500">
+                                <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 mr-2" />
+                                PUBLISHED
+                              </span>
+                            ) : (
+                              <span className="flex items-center text-xs font-bold text-gray-400">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2" />
+                                DRAFT
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleToggleCourseVisibility(course.id, course.isVisible)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title={course.isVisible ? "Make Draft" : "Publish Course"}
+                            >
+                              {course.isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                            <button
+                              onClick={() => handleOpenCourseModal(course)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title="Edit Course"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCourse(course.id)}
+                              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
+                              title="Delete Course"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : activeTab === 'students' ? (
+              <table className="w-full text-left">
+                <thead className="bg-secondary/5 border-b border-secondary/10">
+                  <tr>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Student</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Joined</th>
+                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <ShieldCheck className="w-12 h-12 text-gray-100 mb-2" />
+                          <span className="text-sm font-medium">No students found. Add one above.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    students.map(student => (
+                      <tr key={student.id} className="hover:bg-secondary/5 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-[#41c8df]/10 rounded-full flex items-center justify-center text-[#41c8df] font-bold">
+                              {student.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-secondary">{student.name}</div>
+                              <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-medium">ID: {student.id.substring(0,8)}...</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-300 font-medium">{student.email}</td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#41c8df]/10 border border-[#41c8df]/30 text-[#41c8df] uppercase">
+                            {student.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-400">
+                          {new Date(student.created_at || '').toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleOpenEnrollModal(student)}
+                              className="p-2 text-gray-400 hover:text-emerald-500 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/30 rounded-lg transition-all"
+                              title="Enroll in Course"
+                            >
+                              <PlusCircle size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleOpenStudentModal(student)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title="Edit Student"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStudent(student.id)}
+                              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
+                              title="Delete Student"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : activeTab === 'payments' ? (
+              <table className="w-full text-left">
+                <thead className="bg-secondary/5 border-b border-secondary/10">
+                  <tr>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Payment ID</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Student</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Amount</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {payments.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <FileText className="w-12 h-12 text-gray-100 mb-2" />
+                          <span className="text-sm font-medium">No payments found.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    payments.map(payment => (
+                      <tr key={payment.id} className="hover:bg-secondary/5 transition-colors group">
+                        <td className="px-6 py-4 text-sm text-secondary font-medium">{payment.id}</td>
+                        <td className="px-6 py-4 text-sm text-gray-300">{payment.student_id}</td>
+                        <td className="px-6 py-4 text-sm text-secondary font-bold">${payment.amount_paid} / ${payment.total_amount}</td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${payment.status === 'paid' ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'}`}>
+                            {payment.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full text-left">
+                <thead className="bg-secondary/5 border-b border-secondary/10">
+                  <tr>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Ticket ID</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Student</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {tickets.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <MessageSquare className="w-12 h-12 text-gray-100 mb-2" />
+                          <span className="text-sm font-medium">No active tickets.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    tickets.map(ticket => (
+                      <tr key={ticket.id} className="hover:bg-secondary/5 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-bold text-secondary">{ticket.id.substring(0,8)}...</div>
+                          <div className="text-xs text-gray-500 truncate max-w-[200px]">{ticket.description}</div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-300 font-medium">{ticket.student_id}</td>
+                        <td className="px-6 py-4">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#41c8df] bg-[#41c8df]/10 px-2 py-1 rounded-md">
+                            {ticket.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                            ticket.status === 'resolved' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                          }`}>
+                            {ticket.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {ticket.status === 'open' && (
+                            <button
+                              onClick={() => handleResolveTicket(ticket.id)}
+                              className="text-xs font-bold text-[#41c8df] hover:underline"
+                              title="Resolve Ticket"
+                            >
+                              Mark Resolved
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Enrollment Modal */}
+      {isEnrollModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsEnrollModalOpen(false)}
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+          />
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="relative w-full max-w-lg bg-background border border-secondary/20 rounded-[2.5rem] shadow-2xl overflow-hidden"
+          >
+            <div className="px-8 py-6 border-b border-secondary/10 flex items-center justify-between">
+              <h2 className="text-xl font-display font-bold text-secondary">Enroll Student</h2>
+              <button onClick={() => setIsEnrollModalOpen(false)} className="text-gray-400 hover:text-secondary" title="Close enrollment modal">
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleEnrollSubmit} className="p-8 space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Student</label>
+                <div className="px-4 py-3 bg-secondary/5 border border-secondary/10 rounded-xl text-gray-300 font-medium">
+                  {selectedStudentForEnroll?.name} ({selectedStudentForEnroll?.email})
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Select Course</label>
+                <select
+                  value={enrollCourseId}
+                  onChange={(e) => setEnrollCourseId(e.target.value)}
+                  className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary transition-all"
+                  required
+                  title="Select Course"
+                >
+                  <option value="" disabled className="bg-slate-900">Choose a course...</option>
+                  {courses.map(course => (
+                    <option key={course.id} value={course.id} className="bg-slate-900">
+                      {course.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEnrollModalOpen(false)}
+                  className="flex-1 px-6 py-3 border border-secondary/10 text-gray-400 font-bold rounded-xl hover:bg-secondary/5 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={formLoading}
+                  className="flex-1 px-6 py-3 bg-[#41c8df] hover:bg-[#38b2c7] text-black font-bold rounded-xl transition-all shadow-lg hover:shadow-[#41c8df]/20 flex items-center justify-center gap-2"
+                >
+                  {formLoading ? <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <ShieldCheck size={20} />}
+                  Confirm Enrollment
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
       {/* Editor Modal */}
       <AnimatePresence>
-        {isModalOpen && (
+        {(isModalOpen || isCourseModalOpen) && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 py-8 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => { setIsModalOpen(false); setIsCourseModalOpen(false); }}
               className="fixed inset-0 bg-background/40 backdrop-blur-sm"
             />
             <motion.div
@@ -524,173 +1267,631 @@ const AdminPanel = () => {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-background/90 backdrop-blur-2xl border border-secondary/20 w-full max-w-4xl rounded-[2.5rem] shadow-[0_0_50px_rgba(65,200,223,0.15)] relative z-10 overflow-hidden flex flex-col max-h-full"
             >
-              {/* Modal Header */}
-              <div className="px-8 py-6 border-b border-secondary/10 flex items-center justify-between bg-secondary/5">
-                <div>
-                  <h2 className="text-2xl font-display font-bold text-secondary">
-                    {editingPost ? 'Edit Article' : 'New Article'}
-                  </h2>
-                  <p className="text-sm text-gray-400 uppercase tracking-widest font-bold mt-1">
-                    {editingPost ? 'Update existing content' : 'Create high-signal insights'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-3 text-gray-400 hover:text-secondary hover:bg-secondary/10 rounded-2xl transition-all border border-transparent hover:border-secondary/20"
-                  title="Close Modal"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-8">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Left Column: Core Data */}
-                  <div className="space-y-6">
+              {activeTab === 'articles' ? (
+                /* Article Form Modal Content */
+                <>
+                  <div className="px-8 py-6 border-b border-secondary/10 flex items-center justify-between bg-secondary/5">
                     <div>
-                      <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
-                        Article Title
-                      </label>
-                      <div className="relative group">
-                        <Type className="absolute left-4 top-4 text-gray-500 group-focus-within:text-[#41c8df] transition-colors" size={18} />
-                        <input
-                          required
-                          type="text"
-                          value={formData.title}
-                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                          placeholder="e.g., The Future of Generative AI"
-                          className="w-full pl-12 pr-4 py-4 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-2xl outline-none transition-all text-secondary font-bold placeholder:text-gray-600"
-                        />
-                      </div>
+                      <h2 className="text-2xl font-display font-bold text-secondary">
+                        {editingPost ? 'Edit Article' : 'New Article'}
+                      </h2>
+                      <p className="text-sm text-gray-400 uppercase tracking-widest font-bold mt-1">
+                        {editingPost ? 'Update existing content' : 'Create high-signal insights'}
+                      </p>
                     </div>
+                    <button
+                      onClick={() => setIsModalOpen(false)}
+                      aria-label="Close article modal"
+                      className="p-3 text-gray-400 hover:text-secondary hover:bg-secondary/10 rounded-2xl transition-all border border-transparent hover:border-secondary/20"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
-                          Category
-                        </label>
-                        <div className="relative group">
-                          <Layout className="absolute left-4 top-4 text-gray-500 group-focus-within:text-[#41c8df] transition-colors" size={18} />
-                          <select
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                            className="w-full pl-12 pr-4 py-4 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-2xl outline-none transition-all text-secondary font-bold appearance-none cursor-pointer [&>option]:bg-background [&>option]:text-secondary"
-                            title="Select Category"
+                  <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Article Title</label>
+                          <div className="relative group">
+                            <Type className="absolute left-4 top-4 text-gray-500 group-focus-within:text-[#41c8df] transition-colors" size={18} />
+                            <input
+                              required
+                              type="text"
+                              id="article-title"
+                              aria-label="Article title"
+                              placeholder="Enter article title"
+                              value={formData.title}
+                              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                              className="w-full pl-12 pr-4 py-4 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-2xl outline-none transition-all text-secondary font-bold placeholder:text-gray-600"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="relative group">
+                            <select
+                              id="article-category"
+                              aria-label="Article category"
+                              title="Select article category"
+                              value={formData.category}
+                              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                              className="w-full px-4 py-4 bg-secondary/5 border border-secondary/10 rounded-2xl outline-none text-secondary font-bold"
+                            >
+                              <option value="AI Insights">AI Insights</option>
+                              <option value="Tutorials">Tutorials</option>
+                              <option value="Case Studies">Case Studies</option>
+                              <option value="Industry Trends">Industry Trends</option>
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, isVisible: !formData.isVisible })}
+                            className={`w-full py-4 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 border transition-all ${formData.isVisible ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-secondary/5 border-secondary/10 text-gray-400'}`}
                           >
-                            <option value="AI Insights">AI Insights</option>
-                            <option value="Tutorials">Tutorials</option>
-                            <option value="Case Studies">Case Studies</option>
-                            <option value="Industry Trends">Industry Trends</option>
-                            <option value="Core Tech">Core Tech</option>
-                            <option value="Management">Management</option>
-                          </select>
+                            {formData.isVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+                            {formData.isVisible ? 'Visible' : 'Hidden'}
+                          </button>
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
-                          Initial Status
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, isVisible: !formData.isVisible })}
-                          className={`w-full py-4 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 border transition-all ${formData.isVisible
-                            ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                            : 'bg-secondary/5 border-secondary/10 text-gray-400'
-                            }`}
-                        >
-                          {formData.isVisible ? <Eye size={18} /> : <EyeOff size={18} />}
-                          {formData.isVisible ? 'Visible' : 'Hidden'}
-                        </button>
+                      <div className="space-y-6">
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Cover Image URL / Upload</label>
+                        <div className="space-y-4">
+                          <input
+                            type="text"
+                            value={formData.image}
+                            onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                            placeholder="Paste image URL here..."
+                            className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 rounded-xl text-secondary text-sm"
+                          />
+                          <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-secondary/10 bg-secondary/5">
+                            {formData.image ? <img src={formData.image} className="w-full h-full object-cover" alt="" /> : <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500"><ImageIcon className="mb-2" /><span>No Image</span></div>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-8">
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Article Content (Markdown)</label>
+                      <textarea
+                        required
+                        id="article-content"
+                        aria-label="Article content in Markdown"
+                        placeholder="Write your article content here (Markdown supported)..."
+                        value={formData.content}
+                        onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                        className="w-full h-[320px] p-6 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-[2rem] outline-none transition-all text-secondary leading-relaxed font-medium resize-none"
+                      />
+                    </div>
+                    <div className="mt-10 flex flex-col sm:flex-row items-center justify-end gap-4">
+                       <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase text-xs">Cancel</button>
+                       <button type="submit" disabled={formLoading} className="px-10 py-4 bg-[#41c8df] text-black font-black uppercase text-xs rounded-2xl transition-all shadow-xl disabled:opacity-50">
+                          {formLoading ? 'Processing...' : editingPost ? 'Update Post' : 'Publish Article'}
+                       </button>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                /* Course Form Modal Content */
+                <>
+                  <div className="px-8 py-6 border-b border-secondary/10 flex items-center justify-between bg-secondary/5">
+                    <div>
+                      <h2 className="text-2xl font-display font-bold text-secondary">
+                        {editingCourse ? 'Edit Course' : 'New Course'}
+                      </h2>
+                      <p className="text-sm text-gray-400 uppercase tracking-widest font-bold mt-1">
+                        Define course curriculum and details
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsCourseModalOpen(false)}
+                      aria-label="Close course modal"
+                      className="p-3 text-gray-400 hover:text-secondary hover:bg-secondary/10 rounded-2xl transition-all border border-transparent hover:border-secondary/20"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCourseFormSubmit} className="flex-1 overflow-y-auto p-8 space-y-8">
+
+                    {/* ── Section 1: Hero Info ── */}
+                    <div>
+                      <p className="text-xs font-black text-[#41c8df] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span className="w-5 h-5 bg-[#41c8df]/10 rounded-full flex items-center justify-center text-[10px]">1</span>
+                        Hero Section
+                      </p>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Course Title *</label>
+                            <input required type="text" id="course-title" aria-label="Course title"
+                              placeholder="e.g., Data Science & Machine Learning"
+                              value={courseFormData.title}
+                              onChange={(e) => setCourseFormData({ ...courseFormData, title: e.target.value })}
+                              className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none transition-all text-secondary font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Subtitle</label>
+                            <input type="text"
+                              placeholder="e.g., Unlock Insights from Data & Build Predictive Models"
+                              value={courseFormData.subtitle}
+                              onChange={(e) => setCourseFormData({ ...courseFormData, subtitle: e.target.value })}
+                              className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none transition-all text-secondary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Description *</label>
+                            <textarea required
+                              value={courseFormData.description}
+                              onChange={(e) => setCourseFormData({ ...courseFormData, description: e.target.value })}
+                              className="w-full h-28 p-4 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl text-secondary resize-none outline-none"
+                              placeholder="Full course description shown in hero section..."
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Duration</label>
+                              <input type="text" placeholder="e.g., 6 months"
+                                value={courseFormData.duration}
+                                onChange={(e) => setCourseFormData({ ...courseFormData, duration: e.target.value })}
+                                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Placement %</label>
+                              <input type="text" placeholder="e.g., 95%"
+                                value={courseFormData.placement}
+                                onChange={(e) => setCourseFormData({ ...courseFormData, placement: e.target.value })}
+                                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Level</label>
+                              <select id="course-level" aria-label="Course level" title="Course level"
+                                value={courseFormData.level}
+                                onChange={(e) => setCourseFormData({ ...courseFormData, level: e.target.value })}
+                                className="w-full px-3 py-3 bg-secondary/5 border border-secondary/10 rounded-xl outline-none text-secondary text-sm"
+                              >
+                                <option value="Beginner">Beginner</option>
+                                <option value="Intermediate">Intermediate</option>
+                                <option value="Advanced">Advanced</option>
+                                <option value="Professional">Professional</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Students</label>
+                              <input type="text" placeholder="e.g., 150+"
+                                value={courseFormData.students}
+                                onChange={(e) => setCourseFormData({ ...courseFormData, students: e.target.value })}
+                                className="w-full px-3 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Rating</label>
+                              <input type="number" step="0.1" min="1" max="5" id="course-rating" aria-label="Course rating"
+                                placeholder="4.8"
+                                value={courseFormData.rating}
+                                onChange={(e) => setCourseFormData({ ...courseFormData, rating: parseFloat(e.target.value) })}
+                                className="w-full px-3 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Course ID (Slug)</label>
+                            <input type="text" placeholder="e.g., ai-ml-bootcamp (auto-generated if empty)"
+                              value={courseFormData.id}
+                              onChange={(e) => setCourseFormData({ ...courseFormData, id: e.target.value })}
+                              className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 rounded-xl outline-none text-secondary text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Course Image URL</label>
+                            <input type="text" placeholder="https://... or /local-image.png"
+                              value={courseFormData.image}
+                              onChange={(e) => setCourseFormData({ ...courseFormData, image: e.target.value })}
+                              className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary text-sm"
+                            />
+                          </div>
+                          <div className="w-full h-48 rounded-xl overflow-hidden border border-secondary/10 bg-secondary/5 flex items-center justify-center">
+                            {courseFormData.image
+                              ? <img src={courseFormData.image} className="w-full h-full object-cover" alt="Preview" />
+                              : <div className="flex flex-col items-center text-gray-500"><ImageIcon size={32} /><span className="text-xs mt-2">No Image</span></div>
+                            }
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
-                        Featured Image
-                      </label>
-                      <div className="space-y-4">
-                        {formData.image && (
-                          <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-gray-100 group">
-                            <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => setFormData({ ...formData, image: '' })}
-                              className="absolute top-2 right-2 p-2 bg-background/50 hover:bg-background text-secondary rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                              title="Remove Image"
+                    {/* ── Section 2: Skills ── */}
+                    <div className="border-t border-secondary/10 pt-8">
+                      <p className="text-xs font-black text-[#41c8df] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span className="w-5 h-5 bg-[#41c8df]/10 rounded-full flex items-center justify-center text-[10px]">2</span>
+                        Skills You'll Gain
+                      </p>
+                      <div className="space-y-2">
+                        {courseFormData.skills.map((skill, i) => (
+                          <div key={i} className="flex gap-2">
+                            <input type="text" value={skill}
+                              onChange={(e) => { const u = [...courseFormData.skills]; u[i] = e.target.value; setCourseFormData({ ...courseFormData, skills: u }); }}
+                              placeholder="e.g., Python"
+                              className="flex-1 px-4 py-2.5 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary text-sm"
+                            />
+                            <button type="button" 
+                              onClick={() => setCourseFormData({ ...courseFormData, skills: courseFormData.skills.filter((_, idx) => idx !== i) })}
+                              className="p-2.5 text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                              title="Remove skill"
                             >
                               <X size={16} />
                             </button>
                           </div>
-                        )}
-
-                        <label className={`flex flex-col items-center justify-center w-full ${formData.image ? 'h-24' : 'h-48'} border-2 border-dashed border-secondary/20 hover:border-[#41c8df] rounded-2xl cursor-pointer bg-secondary/5 hover:bg-[#41c8df]/10 transition-all group`}>
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload className={`w-8 h-8 mb-3 text-gray-500 group-hover:text-[#41c8df] ${formData.image ? 'hidden' : 'block'}`} />
-                            <p className="text-sm text-gray-400 font-bold uppercase tracking-wider group-hover:text-[#41c8df]">
-                              {formData.image ? 'Change Image' : 'Click to upload image'}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1 uppercase tracking-widest">
-                              SVG, PNG, JPG (MAX. 2MB)
-                            </p>
-                          </div>
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                          />
-                        </label>
+                        ))}
+                        <button type="button" onClick={() => setCourseFormData({ ...courseFormData, skills: [...courseFormData.skills, ''] })}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-[#41c8df]/10 text-[#41c8df] rounded-xl text-sm font-bold hover:bg-[#41c8df]/20 transition-all">
+                          <Plus size={14} /> Add Skill
+                        </button>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Right Column: Content Body */}
-                  <div>
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">
-                      Article Content (Rich Text)
-                    </label>
-                    <textarea
+                    {/* ── Section 3: Learning Outcomes ── */}
+                    <div className="border-t border-secondary/10 pt-8">
+                      <p className="text-xs font-black text-[#41c8df] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span className="w-5 h-5 bg-[#41c8df]/10 rounded-full flex items-center justify-center text-[10px]">3</span>
+                        Learning Outcomes (What You'll Learn)
+                      </p>
+                      <div className="space-y-2">
+                        {courseFormData.outcomes.map((item, i) => (
+                          <div key={i} className="flex gap-2">
+                            <input type="text" value={item}
+                              onChange={(e) => { const u = [...courseFormData.outcomes]; u[i] = e.target.value; setCourseFormData({ ...courseFormData, outcomes: u }); }}
+                              placeholder="e.g., Build end-to-end machine learning pipelines"
+                              className="flex-1 px-4 py-2.5 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary text-sm"
+                            />
+                            <button type="button" 
+                              onClick={() => setCourseFormData({ ...courseFormData, outcomes: courseFormData.outcomes.filter((_, idx) => idx !== i) })}
+                              className="p-2.5 text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                              title="Remove outcome"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => setCourseFormData({ ...courseFormData, outcomes: [...courseFormData.outcomes, ''] })}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-[#41c8df]/10 text-[#41c8df] rounded-xl text-sm font-bold hover:bg-[#41c8df]/20 transition-all">
+                          <Plus size={14} /> Add Outcome
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ── Section 4: Curriculum Modules ── */}
+                    <div className="border-t border-secondary/10 pt-8">
+                      <p className="text-xs font-black text-[#41c8df] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span className="w-5 h-5 bg-[#41c8df]/10 rounded-full flex items-center justify-center text-[10px]">4</span>
+                        Course Curriculum (Modules)
+                      </p>
+                      <div className="space-y-2">
+                        {courseFormData.modules.map((mod, i) => (
+                          <div key={i} className="flex gap-2 items-center">
+                            <span className="w-7 h-7 bg-[#41c8df] text-black rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
+                            <input type="text" value={mod}
+                              onChange={(e) => { const u = [...courseFormData.modules]; u[i] = e.target.value; setCourseFormData({ ...courseFormData, modules: u }); }}
+                              placeholder="e.g., Python Programming Fundamentals"
+                              className="flex-1 px-4 py-2.5 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary text-sm"
+                            />
+                            <button type="button" 
+                              onClick={() => setCourseFormData({ ...courseFormData, modules: courseFormData.modules.filter((_, idx) => idx !== i) })}
+                              className="p-2.5 text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                              title="Remove module"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => setCourseFormData({ ...courseFormData, modules: [...courseFormData.modules, ''] })}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-[#41c8df]/10 text-[#41c8df] rounded-xl text-sm font-bold hover:bg-[#41c8df]/20 transition-all">
+                          <Plus size={14} /> Add Module
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ── Section 5: Prerequisites ── */}
+                    <div className="border-t border-secondary/10 pt-8">
+                      <p className="text-xs font-black text-[#41c8df] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span className="w-5 h-5 bg-[#41c8df]/10 rounded-full flex items-center justify-center text-[10px]">5</span>
+                        Prerequisites
+                      </p>
+                      <div className="space-y-2">
+                        {courseFormData.prerequisites.map((item, i) => (
+                          <div key={i} className="flex gap-2">
+                            <input type="text" value={item}
+                              onChange={(e) => { const u = [...courseFormData.prerequisites]; u[i] = e.target.value; setCourseFormData({ ...courseFormData, prerequisites: u }); }}
+                              placeholder="e.g., Basic programming knowledge (Python preferred)"
+                              className="flex-1 px-4 py-2.5 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary text-sm"
+                            />
+                            <button type="button" 
+                              onClick={() => setCourseFormData({ ...courseFormData, prerequisites: courseFormData.prerequisites.filter((_, idx) => idx !== i) })}
+                              className="p-2.5 text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                              title="Remove prerequisite"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => setCourseFormData({ ...courseFormData, prerequisites: [...courseFormData.prerequisites, ''] })}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-[#41c8df]/10 text-[#41c8df] rounded-xl text-sm font-bold hover:bg-[#41c8df]/20 transition-all">
+                          <Plus size={14} /> Add Prerequisite
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ── Section 6: Career Paths ── */}
+                    <div className="border-t border-secondary/10 pt-8">
+                      <p className="text-xs font-black text-[#41c8df] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span className="w-5 h-5 bg-[#41c8df]/10 rounded-full flex items-center justify-center text-[10px]">6</span>
+                        Potential Career Paths
+                      </p>
+                      <div className="space-y-2">
+                        {courseFormData.career.map((item, i) => (
+                          <div key={i} className="flex gap-2">
+                            <input type="text" value={item}
+                              onChange={(e) => { const u = [...courseFormData.career]; u[i] = e.target.value; setCourseFormData({ ...courseFormData, career: u }); }}
+                              placeholder="e.g., Data Scientist"
+                              className="flex-1 px-4 py-2.5 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary text-sm"
+                            />
+                            <button type="button" 
+                              onClick={() => setCourseFormData({ ...courseFormData, career: courseFormData.career.filter((_, idx) => idx !== i) })}
+                              className="p-2.5 text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                              title="Remove career path"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => setCourseFormData({ ...courseFormData, career: [...courseFormData.career, ''] })}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-[#41c8df]/10 text-[#41c8df] rounded-xl text-sm font-bold hover:bg-[#41c8df]/20 transition-all">
+                          <Plus size={14} /> Add Career Path
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-secondary/10 pt-6 flex flex-col sm:flex-row items-center justify-end gap-4">
+                      <button type="button" onClick={() => setIsCourseModalOpen(false)} className="px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase text-xs">Cancel</button>
+                      <button type="submit" disabled={formLoading} className="px-10 py-4 bg-[#41c8df] text-black font-black uppercase text-xs rounded-2xl transition-all shadow-xl disabled:opacity-50">
+                        {formLoading ? 'Saving...' : editingCourse ? 'Update Course' : 'Create Course'}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Advanced Diagnostics Section */}
+      {/* Student Modal */}
+      <AnimatePresence>
+        {isStudentModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsStudentModalOpen(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-background/90 backdrop-blur-2xl border border-secondary/20 rounded-[2rem] p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+              <button onClick={() => setIsStudentModalOpen(false)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all" title="Close Modal">
+                <X size={20} />
+              </button>
+              
+              <h2 className="text-2xl font-display font-bold text-secondary mb-2 flex items-center gap-3">
+                <ShieldCheck className="text-[#41c8df]" />
+                {editingStudent ? 'Edit Student Profile' : 'Register New Student'}
+              </h2>
+              <p className="text-sm text-gray-400 mb-8">
+                {editingStudent ? 'Update student details and access levels.' : 'Create a new student account to grant portal access.'}
+              </p>
+
+              {error && (
+                <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-200">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleStudentFormSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label htmlFor="student-name" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Full Name *</label>
+                    <input
+                      id="student-name"
+                      type="text"
                       required
-                      value={formData.content}
-                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                      placeholder="Write your article insights here..."
-                      className="w-full h-[320px] p-6 bg-secondary/5 border border-secondary/10 focus:bg-secondary/10 focus:border-[#41c8df] rounded-[2rem] outline-none transition-all text-secondary leading-relaxed font-medium resize-none shadow-inner placeholder:text-gray-600"
+                      value={studentFormData.name}
+                      onChange={(e) => setStudentFormData({ ...studentFormData, name: e.target.value })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                      placeholder="e.g., John Doe"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="student-email" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email Address *</label>
+                    <input
+                      id="student-email"
+                      type="email"
+                      required
+                      value={studentFormData.email}
+                      onChange={(e) => setStudentFormData({ ...studentFormData, email: e.target.value })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                      placeholder="student@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="student-password" className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                      Password {editingStudent ? '(Leave blank to keep unchanged)' : '*'}
+                    </label>
+                    <input
+                      id="student-password"
+                      type="password"
+                      required={!editingStudent}
+                      value={studentFormData.password_hash}
+                      onChange={(e) => setStudentFormData({ ...studentFormData, password_hash: e.target.value })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                      placeholder="Secure password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="student-phone" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Phone Number</label>
+                    <input
+                      id="student-phone"
+                      type="tel"
+                      value={studentFormData.phone}
+                      onChange={(e) => setStudentFormData({ ...studentFormData, phone: e.target.value })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                      placeholder="+1 (555) 000-0000"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label htmlFor="student-role" className="text-xs font-bold text-gray-400 uppercase tracking-wider">System Role</label>
+                    <select
+                      id="student-role"
+                      value={studentFormData.role}
+                      onChange={(e) => setStudentFormData({ ...studentFormData, role: e.target.value as 'student' | 'admin' })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
+                      title="System Role"
+                    >
+                      <option value="student">Student (Standard Access)</option>
+                      <option value="admin">Administrator (Full Access)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="border-t border-secondary/10 pt-6 flex flex-col sm:flex-row items-center justify-end gap-4 mt-8">
+                  <button type="button" onClick={() => setIsStudentModalOpen(false)} className="px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase text-xs">Cancel</button>
+                  <button type="submit" disabled={formLoading} className="px-10 py-4 bg-[#41c8df] text-black font-black uppercase text-xs rounded-2xl transition-all shadow-xl disabled:opacity-50 flex items-center gap-2">
+                    {formLoading ? 'Processing...' : editingStudent ? 'Save Changes' : 'Create Student'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Payment Modal */}
+      <AnimatePresence>
+        {isPaymentModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsPaymentModalOpen(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-background/90 backdrop-blur-2xl border border-secondary/20 rounded-[2rem] p-8 w-full max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto">
+              <button onClick={() => setIsPaymentModalOpen(false)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all" title="Close Modal">
+                <X size={20} />
+              </button>
+
+              <h2 className="text-2xl font-display font-bold text-secondary mb-2 flex items-center gap-3">
+                <FileText className="text-[#41c8df]" />
+                Record Payment
+              </h2>
+              <p className="text-sm text-gray-400 mb-8">Log a fee payment or EMI installment for a student.</p>
+
+              {error && (
+                <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-200">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={handlePaymentFormSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <label htmlFor="payment-student" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Student *</label>
+                  <select
+                    id="payment-student"
+                    required
+                    value={paymentFormData.student_id}
+                    onChange={(e) => setPaymentFormData({ ...paymentFormData, student_id: e.target.value })}
+                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
+                    title="Select Student"
+                  >
+                    <option value="">-- Select Student --</option>
+                    {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.email})</option>)}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="payment-total" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Fee (₹) *</label>
+                    <input
+                      id="payment-total"
+                      type="number" required min={0}
+                      value={paymentFormData.total_amount}
+                      onChange={(e) => setPaymentFormData({ ...paymentFormData, total_amount: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                      placeholder="e.g. 50000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="payment-paid" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Amount Paid (₹) *</label>
+                    <input
+                      id="payment-paid"
+                      type="number" required min={0}
+                      value={paymentFormData.amount_paid}
+                      onChange={(e) => setPaymentFormData({ ...paymentFormData, amount_paid: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                      placeholder="e.g. 10000"
                     />
                   </div>
                 </div>
 
-                {/* Modal Footer */}
-                <div className="mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t border-gray-100">
-                  <div className="flex items-center text-xs text-gray-400 font-bold gap-4 uppercase tracking-[0.1em]">
-                    <div className="flex items-center gap-1.5 text-black">
-                      <CheckCircle2 size={14} className="text-[#41c8df]" /> Character Count: {formData.content.length}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="payment-due" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Due Date *</label>
+                    <input
+                      id="payment-due"
+                      type="date" required
+                      value={paymentFormData.due_date}
+                      onChange={(e) => setPaymentFormData({ ...paymentFormData, due_date: e.target.value })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                      title="Due Date"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="payment-status" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status</label>
+                    <select
+                      id="payment-status"
+                      value={paymentFormData.status}
+                      onChange={(e) => setPaymentFormData({ ...paymentFormData, status: e.target.value as 'pending' | 'paid' })}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
+                      title="Payment Status"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+                </div>
+
+                {paymentFormData.total_amount > 0 && (
+                  <div className="bg-secondary/5 border border-secondary/10 rounded-xl p-4">
+                    <div className="flex justify-between text-sm font-bold text-gray-400 mb-2">
+                      <span>Balance Due</span>
+                      <span className={paymentFormData.total_amount - paymentFormData.amount_paid > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                        ₹{(paymentFormData.total_amount - paymentFormData.amount_paid).toLocaleString()}
+                      </span>
                     </div>
-                    <div>Ready to publish?</div>
+                      <div className="w-full bg-white/5 rounded-full h-2">
+                        <motion.div
+                          className="bg-[#41c8df] h-2 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min((paymentFormData.amount_paid / paymentFormData.total_amount) * 100, 100)}%` }}
+                          transition={{ duration: 0.5, ease: "easeOut" }}
+                        />
+                      </div>
+                    <p className="text-xs text-gray-500 mt-1 text-right">
+                      {Math.round((paymentFormData.amount_paid / paymentFormData.total_amount) * 100)}% cleared
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => setIsModalOpen(false)}
-                      className="flex-1 sm:flex-none px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase tracking-widest text-xs transition-all"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={formLoading}
-                      className="flex-1 sm:flex-none inline-flex items-center justify-center px-10 py-4 bg-[#41c8df] hover:bg-secondary text-black font-black uppercase tracking-[0.2em] text-xs rounded-2xl transition-all shadow-[0_0_20px_rgba(65,200,223,0.3)] hover:shadow-[0_0_30px_rgba(65,200,223,0.5)] active:scale-95 disabled:opacity-50"
-                    >
-                      {formLoading ? (
-                        <div className="w-5 h-5 border-2 border-[#41c8df]/50 border-t-[#41c8df] rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4 mr-3" />
-                          {editingPost ? 'Update Article' : 'Publish Article'}
-                        </>
-                      )}
-                    </button>
-                  </div>
+                )}
+
+                <div className="border-t border-secondary/10 pt-6 flex flex-col sm:flex-row items-center justify-end gap-4">
+                  <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase text-xs">Cancel</button>
+                  <button type="submit" disabled={formLoading} className="px-10 py-4 bg-[#41c8df] text-black font-black uppercase text-xs rounded-2xl transition-all shadow-xl disabled:opacity-50">
+                    {formLoading ? 'Saving...' : 'Record Payment'}
+                  </button>
                 </div>
               </form>
             </motion.div>

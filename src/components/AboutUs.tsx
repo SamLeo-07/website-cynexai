@@ -45,8 +45,9 @@ const AboutUs = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if ((location.state as any)?.scrollToId) {
-      const targetId = (location.state as any).scrollToId;
+    const state = location.state as { scrollToId?: string } | null;
+    if (state?.scrollToId) {
+      const targetId = state.scrollToId;
       const timer = setTimeout(() => {
         const element = document.getElementById(targetId);
         if (element) {

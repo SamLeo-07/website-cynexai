@@ -11,8 +11,7 @@ const navItems = [
   { name: 'Contact', href: '#contact' },
   { name: 'Gallery', href: '/gallery' },
   { name: 'Blog', href: '/blog' },
-  // 'Pay Now' has been removed as requested.
-  { name: 'About Us', href: '/about' }, // Added 'About Us' link
+  { name: 'About Us', href: '/about' },
 ];
 
 export default function Header() {
@@ -29,8 +28,9 @@ export default function Header() {
 
   // Listen for scrollToId in location state (e.g., from Footer links or other pages)
   useEffect(() => {
-    if (location.pathname === '/' && (location.state as any)?.scrollToId) {
-      const targetId = (location.state as any).scrollToId;
+    const state = location.state as { scrollToId?: string } | null;
+    if (location.pathname === '/' && state?.scrollToId) {
+      const targetId = state.scrollToId;
       console.log(`[Header] Navigation state detected. Attempting to scroll to: ${targetId}`);
       
       const timer = setTimeout(() => {
@@ -123,7 +123,7 @@ export default function Header() {
                   onClick={(e) => handleNavClick(href, e)}
                   className={`relative font-bold tracking-wide transition-all duration-300 px-6 py-2.5 rounded-full text-sm uppercase
                     ${isActive
-                      ? 'bg-background text-secondary shadow-lg'
+                      ? 'text-white'
                       : 'text-black hover:bg-background/10'
                     }`}
                 >
@@ -132,7 +132,6 @@ export default function Header() {
               );
             })}
 
-            {/* Theme Toggle - REMOVED */}
           </nav>
 
           {/* Mobile toggle */}
@@ -171,7 +170,7 @@ export default function Header() {
                       onClick={(e) => handleNavClick(href, e)}
                       className={`block py-3 px-6 rounded-xl text-lg font-bold transition-all duration-300
                         ${isActive
-                          ? 'bg-background text-secondary shadow-md'
+                          ? 'text-white'
                           : 'text-black hover:bg-background/5'
                         }`}
                     >
@@ -179,6 +178,7 @@ export default function Header() {
                     </a>
                   );
                 })}
+
 
                 {/* Mobile Theme Toggle - REMOVED */}
               </div>

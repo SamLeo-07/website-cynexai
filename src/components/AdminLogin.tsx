@@ -12,24 +12,12 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, error }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    const isMounted = React.useRef(true);
-    React.useEffect(() => {
-        return () => { isMounted.current = false; };
-    }, []);
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-
-        // Simulate a brief loading state for better UX
-        setTimeout(() => {
-            if (isMounted.current) {
-                onLogin(password);
-            }
-            if (isMounted.current) {
-                setLoading(false);
-            }
-        }, 600);
+        onLogin(password);
+        // We don't need to setLoading(false) here because if onLogin is successful, 
+        // the parent will unmount this component.
     };
 
     return (

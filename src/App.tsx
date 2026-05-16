@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 // Mock component imports to make the app runnable
@@ -8,7 +7,6 @@ import Hero from './components/Hero';
 import Courses from './components/Courses';
 import Skills from './components/Skills';
 import Reviews from './components/Reviews';
-import OurTeam from './components/OurTeam';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import CourseDetail from './components/CourseDetail';
@@ -21,6 +19,8 @@ import BlogPage from './components/BlogPage';
 import BlogPostDetail from './components/BlogPostDetail';
 import ThreeBackground from './components/ThreeBackground';
 import AboutUs from './components/AboutUs';
+import StudentLogin from './components/StudentLogin';
+import StudentPortal from './components/StudentPortal';
 
 
 const HomePage = () => (
@@ -51,6 +51,8 @@ function App() {
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:id" element={<BlogPostDetail />} />
           <Route path="/about" element={<AboutUs />} />
+          <Route path="/login" element={<StudentLogin />} />
+          <Route path="/portal" element={<StudentPortal />} />
         </Routes>
         <Footer />
       </div>

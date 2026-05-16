@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion, easeOut, AnimatePresence } from 'framer-motion'; // Ensure easeOut is imported
+import { motion, easeOut, AnimatePresence } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
+import { getCourses } from '../lib/turso';
 import {
   ArrowLeft,
   Clock,
@@ -326,11 +327,84 @@ export const courseData = {
 // ====================================================================
 
 const CourseDetail = () => {
-  const { courseId } = useParams(); // Correctly get the ID from the URL parameter
-  const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.1 }); // Initialize useInView
+  const { courseId } = useParams();
+  const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.1 });
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [currentOfferImage, setCurrentOfferImage] = useState(0);
   const offerImages = ['/offer-laptop.png', '/offer-laptop-2.png', '/offer-laptop-3.png'];
+
+  // The static data is the default; DB data overrides specific fields
+  type CourseDetailType = typeof courseData[keyof typeof courseData] & {
+    subtitle?: string; placement?: string; id?: string;
+  };
+  const staticCourse = courseData[courseId as keyof typeof courseData];
+  const [course, setCourse] = useState<CourseDetailType | null>(staticCourse ?? null);
+  const [isDbLoading, setIsDbLoading] = useState(true);
+
+  // Fetch DB override on mount
+  useEffect(() => {
+    if (!courseId) {
+      setIsDbLoading(false);
+      return;
+    }
+    const fetchDbCourse = async () => {
+      try {
+        const all = await getCourses(false);
+        const dbCourse = all.find(c => c.id === courseId);
+        if (!dbCourse) {
+          setIsDbLoading(false);
+          return;
+        }
+
+        const safeArr = (v?: string, fallback: string[] = []): string[] => {
+          if (!v) return fallback;
+          try { return JSON.parse(v); } catch { return fallback; }
+        };
+
+        setCourse(prev => {
+          if (!prev) {
+            return {
+              id: dbCourse.id,
+              title: dbCourse.title,
+              subtitle: dbCourse.subtitle || '',
+              description: dbCourse.description,
+              image: dbCourse.image,
+              duration: dbCourse.duration,
+              placement: dbCourse.placement || '',
+              rating: dbCourse.rating,
+              level: dbCourse.level,
+              skills: safeArr(dbCourse.skills),
+              modules: safeArr(dbCourse.modules),
+              outcomes: safeArr(dbCourse.outcomes),
+              prerequisites: safeArr(dbCourse.prerequisites),
+              career: safeArr(dbCourse.career),
+            };
+          }
+          return {
+            ...prev,
+            title: dbCourse.title || prev.title,
+            subtitle: dbCourse.subtitle || prev.subtitle,
+            description: dbCourse.description || prev.description,
+            image: dbCourse.image || prev.image,
+            duration: dbCourse.duration || prev.duration,
+            placement: dbCourse.placement || prev.placement,
+            rating: dbCourse.rating ?? prev.rating,
+            level: dbCourse.level || prev.level,
+            skills: safeArr(dbCourse.skills, prev.skills),
+            modules: safeArr(dbCourse.modules, prev.modules),
+            outcomes: safeArr(dbCourse.outcomes, prev.outcomes),
+            prerequisites: safeArr(dbCourse.prerequisites, prev.prerequisites),
+            career: safeArr(dbCourse.career, prev.career),
+          };
+        });
+      } catch (e) {
+        console.warn('CourseDetail: Could not fetch DB override, using static data.', e);
+      } finally {
+        setIsDbLoading(false);
+      }
+    };
+    fetchDbCourse();
+  }, [courseId]);
 
   useEffect(() => {
     if (showOfferModal) {
@@ -341,7 +415,13 @@ const CourseDetail = () => {
     }
   }, [showOfferModal, offerImages.length]);
 
-  const course = courseData[courseId as keyof typeof courseData];
+  if (isDbLoading) {
+    return (
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center py-20 px-4 sm:px-6 lg:px-8 text-secondary">
+        <div className="w-12 h-12 border-4 border-[#41c8df] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   if (!course) {
     return (
