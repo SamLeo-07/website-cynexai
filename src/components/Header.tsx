@@ -1,22 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, ChevronDown } from 'lucide-react';
+
+const courseCategories = [
+  { name: 'AI & Data Science', desc: 'Machine Learning, GenAI & Analytics' },
+  { name: 'Development', desc: 'Full Stack Java, Python & Web Development' },
+  { name: 'DevOps & Cloud', desc: 'AWS, CI/CD & Cloud Infrastructures' },
+  { name: 'Testing & SAP', desc: 'Manual/Automation Testing & SAP Solutions' },
+  { name: 'Browse All Courses', desc: 'Explore all CynexAI training courses', isAll: true }
+];
 
 const navItems = [
   { name: 'Home', href: '/' },
-  { name: 'Courses', href: '#courses' },
-  { name: 'Skills', href: '#skills' },
-  { name: 'Reviews', href: '#reviews' },
+  { name: 'Courses', href: '/courses' },
   { name: 'Contact', href: '#contact' },
-  { name: 'Gallery', href: '/gallery' },
   { name: 'Blog', href: '/blog' },
   { name: 'About Us', href: '/about' },
+];
+
+const aboutSubItems = [
+  { name: 'About Us', href: '/about', desc: 'Learn more about our mission & values' },
+  { name: 'Skills', href: '#skills', desc: 'Core competencies & training areas' },
+  { name: 'Reviews', href: '#reviews', desc: 'Student success stories & placements' },
+  { name: 'Gallery', href: '/gallery', desc: 'Our campus & classroom memories' }
 ];
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isCoursesHovered, setIsCoursesHovered] = useState(false);
+  const [mobileCoursesOpen, setMobileCoursesOpen] = useState(false);
+  const [isAboutHovered, setIsAboutHovered] = useState(false);
+  const [mobileAboutOpen, setMobileAboutOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -116,6 +132,120 @@ export default function Header() {
                     ? location.pathname === '/' && location.hash === href
                     : location.pathname === href;
 
+              if (name === 'Courses') {
+                return (
+                  <div
+                    key={name}
+                    className="relative py-2"
+                    onMouseEnter={() => setIsCoursesHovered(true)}
+                    onMouseLeave={() => setIsCoursesHovered(false)}
+                  >
+                    <button
+                      onClick={(e) => handleNavClick(href, e)}
+                      className={`relative font-bold tracking-wide transition-all duration-300 px-6 py-2.5 rounded-full text-sm uppercase flex items-center gap-1.5
+                        ${isActive
+                          ? 'text-white'
+                          : 'text-black hover:bg-background/10'
+                        }`}
+                    >
+                      {name}
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isCoursesHovered ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCoursesHovered && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 15 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-80 rounded-2xl bg-gray-950/95 backdrop-blur-xl border border-[#41c8df]/30 shadow-2xl p-2 z-50 text-white"
+                        >
+                          <div className="flex flex-col gap-1">
+                            {courseCategories.map((cat) => (
+                              <button
+                                key={cat.name}
+                                onClick={() => {
+                                  setIsCoursesHovered(false);
+                                  if (cat.isAll) {
+                                    navigate('/courses', { state: { category: 'All' } });
+                                  } else {
+                                    navigate('/courses', { state: { category: cat.name } });
+                                  }
+                                }}
+                                className="flex flex-col items-start text-left px-4 py-2.5 rounded-xl hover:bg-[#41c8df]/25 hover:text-[#41c8df] transition-all duration-200 group"
+                              >
+                                <span className="font-bold text-sm tracking-wide text-white group-hover:text-[#41c8df]">
+                                  {cat.name}
+                                </span>
+                                <span className="text-[11px] text-gray-400 font-medium group-hover:text-gray-200 mt-0.5">
+                                  {cat.desc}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              }
+
+              if (name === 'About Us') {
+                return (
+                  <div
+                    key={name}
+                    className="relative py-2"
+                    onMouseEnter={() => setIsAboutHovered(true)}
+                    onMouseLeave={() => setIsAboutHovered(false)}
+                  >
+                    <button
+                      onClick={(e) => handleNavClick(href, e)}
+                      className={`relative font-bold tracking-wide transition-all duration-300 px-6 py-2.5 rounded-full text-sm uppercase flex items-center gap-1.5
+                        ${isActive
+                          ? 'text-white'
+                          : 'text-black hover:bg-background/10'
+                        }`}
+                    >
+                      {name}
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isAboutHovered ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isAboutHovered && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 15 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-80 rounded-2xl bg-gray-950/95 backdrop-blur-xl border border-[#41c8df]/30 shadow-2xl p-2 z-50 text-white"
+                        >
+                          <div className="flex flex-col gap-1">
+                            {aboutSubItems.map((sub) => (
+                              <button
+                                key={sub.name}
+                                onClick={(e) => {
+                                  setIsAboutHovered(false);
+                                  handleNavClick(sub.href, e);
+                                }}
+                                className="flex flex-col items-start text-left px-4 py-2.5 rounded-xl hover:bg-[#41c8df]/25 hover:text-[#41c8df] transition-all duration-200 group"
+                              >
+                                <span className="font-bold text-sm tracking-wide text-white group-hover:text-[#41c8df]">
+                                  {sub.name}
+                                </span>
+                                <span className="text-[11px] text-gray-400 font-medium group-hover:text-gray-200 mt-0.5">
+                                  {sub.desc}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              }
+
               return (
                 <a
                   key={name}
@@ -162,6 +292,86 @@ export default function Header() {
                       : href.startsWith('#')
                         ? location.pathname === '/' && location.hash === href
                         : location.pathname === href;
+
+                  if (name === 'Courses') {
+                    return (
+                      <div key={name} className="flex flex-col">
+                        <button
+                          onClick={() => setMobileCoursesOpen(!mobileCoursesOpen)}
+                          className="flex items-center justify-between w-full py-3 px-6 rounded-xl text-lg font-bold transition-all duration-300 text-black hover:bg-background/5"
+                        >
+                          <span>{name}</span>
+                          <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${mobileCoursesOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence>
+                          {mobileCoursesOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="pl-6 space-y-1 overflow-hidden"
+                            >
+                              {courseCategories.map((cat) => (
+                                <button
+                                  key={cat.name}
+                                  onClick={() => {
+                                    setIsOpen(false);
+                                    setMobileCoursesOpen(false);
+                                    if (cat.isAll) {
+                                      navigate('/courses', { state: { category: 'All' } });
+                                    } else {
+                                      navigate('/courses', { state: { category: cat.name } });
+                                    }
+                                  }}
+                                  className="block w-full text-left py-2.5 px-4 rounded-lg text-sm font-bold text-black/80 hover:bg-background/5 hover:text-black transition-colors"
+                                >
+                                  {cat.name}
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  }
+
+                  if (name === 'About Us') {
+                    return (
+                      <div key={name} className="flex flex-col">
+                        <button
+                          onClick={() => setMobileAboutOpen(!mobileAboutOpen)}
+                          className="flex items-center justify-between w-full py-3 px-6 rounded-xl text-lg font-bold transition-all duration-300 text-black hover:bg-background/5"
+                        >
+                          <span>{name}</span>
+                          <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${mobileAboutOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence>
+                          {mobileAboutOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="pl-6 space-y-1 overflow-hidden"
+                            >
+                              {aboutSubItems.map((sub) => (
+                                <button
+                                  key={sub.name}
+                                  onClick={(e) => {
+                                    setIsOpen(false);
+                                    setMobileAboutOpen(false);
+                                    handleNavClick(sub.href, e);
+                                  }}
+                                  className="block w-full text-left py-2.5 px-4 rounded-lg text-sm font-bold text-black/80 hover:bg-background/5 hover:text-black transition-colors"
+                                >
+                                  {sub.name}
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  }
 
                   return (
                     <a

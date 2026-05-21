@@ -155,7 +155,7 @@ const Hero = () => {
               style={{ transformStyle: 'preserve-3d' }}
             >
               <Link
-                to="/#courses"
+                to="/courses"
                 className="group bg-[#41c8df] text-black hover:bg-[#c09a2f] px-8 py-4 rounded-full font-semibold text-lg shadow-2xl transition-all duration-300 flex items-center"
               >
                 Explore Courses

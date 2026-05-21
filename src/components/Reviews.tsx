@@ -3,67 +3,92 @@ import { motion, AnimatePresence, easeOut } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
 import { Star, Quote, ChevronLeft, ChevronRight } from 'lucide-react';
 import TiltCard from './TiltCard';
+import { getReviews, Review } from '../lib/turso';
+
+const fallbackReviews: Review[] = [
+  {
+    id: 'rev_1',
+    name: 'Anil Kumar',
+    role: 'Java Developer at BeamX Techlab',
+    course: 'Full Stack Java',
+    rating: 5,
+    text: 'CynexAI gave me the skills and confidence I needed to land my first job in tech. The trainers are industry experts and the placement support is truly effective.',
+    image: 'gallery_images/WhatsApp%20Image%202025-07-28%20at%2016.47.23_9abc2e80.jpg?version%3D1755168647258',
+    isVisible: true
+  },
+  {
+    id: 'rev_2',
+    name: 'Suresh Kumar',
+    role: 'Python Developer at Wexl Edu Pvt Ltd',
+    course: 'Full Stack Python',
+    rating: 5,
+    text: 'From day one, the learning experience was smooth, practical, and job-focused. I highly recommend CynexAI to anyone serious about starting a tech career.',
+    image: 'gallery_images/WhatsApp Image 2025-07-28 at 16.48.15_34734bc2.jpg',
+    isVisible: true
+  },
+  {
+    id: 'rev_3',
+    name: 'Y. Bhavana',
+    role: 'Web Developer at Zuper Pvt Ltd',
+    course: 'Web development',
+    rating: 5,
+    text: 'The Web Development course at CynexAI helped me build real websites from scratch. HTML, CSS, JavaScript, and React were taught in a very easy-to-understand way.',
+    image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.01.27_a8763108.jpg',
+    isVisible: true
+  },
+  {
+    id: 'rev_4',
+    name: 'K. Pullaiah',
+    role: 'Software Tester at Persistent Systems',
+    course: 'Testing (Manual + Automation)',
+    rating: 5,
+    text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly.",
+    image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.17.45_290e8232.jpg',
+    isVisible: true
+  },
+  {
+    id: 'rev_5',
+    name: 'Chandrashekar',
+    role: 'Software Tester at Paramount Software',
+    course: 'Testing (Auto + Manual)',
+    rating: 5,
+    text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly",
+    image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.53.04_4aea19f7.jpg',
+    isVisible: true
+  },
+  {
+    id: 'rev_6',
+    name: 'Sai Nath',
+    role: 'Web Developer at Cognizent',
+    course: 'Full Stack',
+    rating: 5,
+    text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly",
+    image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.50.41_ed43fe99.jpg',
+    isVisible: true
+  }
+];
 
 const Reviews = () => {
   const [currentReview, setCurrentReview] = useState(0);
+  const [reviews, setReviews] = useState<Review[]>(fallbackReviews);
   const [ref, inView] = useInView({
     triggerOnce: true,
     threshold: 0.1,
   });
 
-  // ====================================================================
-  // UPDATED: Reviews data based on the provided images
-  // ====================================================================
-  const reviews = [
-    {
-      name: 'Anil Kumar',
-      role: 'Java Developer at BeamX Techlab',
-      course: 'Full Stack Java',
-      rating: 5,
-      text: 'CynexAI gave me the skills and confidence I needed to land my first job in tech. The trainers are industry experts and the placement support is truly effective.',
-      image: 'gallery_images/WhatsApp%20Image%202025-07-28%20at%2016.47.23_9abc2e80.jpg?version%3D1755168647258',
-    },
-    {
-      name: 'Suresh Kumar',
-      role: 'Python Developer at Wexl Edu Pvt Ltd',
-      course: 'Full Stack Python',
-      rating: 5,
-      text: 'From day one, the learning experience was smooth, practical, and job-focused. I highly recommend CynexAI to anyone serious about starting a tech career.',
-      image: 'gallery_images/WhatsApp Image 2025-07-28 at 16.48.15_34734bc2.jpg',
-    },
-    {
-      name: 'Y. Bhavana',
-      role: 'Web Developer at Zuper Pvt Ltd',
-      course: 'Web development',
-      rating: 5,
-      text: 'The Web Development course at CynexAI helped me build real websites from scratch. HTML, CSS, JavaScript, and React were taught in a very easy-to-understand way.',
-      image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.01.27_a8763108.jpg',
-    },
-    {
-      name: 'K. Pullaiah',
-      role: 'Software Tester at Persistent Systems',
-      course: 'Testing (Manual + Automation)',
-      rating: 5,
-      text: 'CynexAI\'s software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly.',
-      image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.17.45_290e8232.jpg',
-    },
-    {
-      name: 'Chandrashekar',
-      role: 'Software Tester at Paramount Software',
-      course: 'Testing (Auto + Manual)',
-      rating: 5,
-      text: 'CynexAI\'s software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly',
-      image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.53.04_4aea19f7.jpg',
-    },
-    {
-      name: 'Sai Nath',
-      role: 'Web Developer at Cognizent',
-      course: 'Full Stack',
-      rating: 5,
-      text: 'CynexAI\'s software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly',
-      image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.50.41_ed43fe99.jpg',
-    },
-  ];
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const data = await getReviews(false);
+        if (data && data.length > 0) {
+          setReviews(data);
+        }
+      } catch (e) {
+        console.error("Failed to load dynamic testimonials", e);
+      }
+    };
+    fetchReviews();
+  }, []);
 
   // Auto-slide functionality
   useEffect(() => {

@@ -23,7 +23,9 @@ import {
   CheckCircle2,
   LogOut,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  Send,
+  Star
 } from 'lucide-react';
 import {
   getPosts,
@@ -52,12 +54,25 @@ import {
   getAllPayments,
   createPayment,
   Payment,
+  updatePayment,
+  deletePayment,
+  togglePaymentVisibility,
   getSupportTickets,
   SupportTicket,
   updateSupportStatus,
+  createSupportTicket,
   createEnrollment,
   getAllEnrollments,
   Enrollment,
+  getSupportReplies,
+  createSupportReply,
+  SupportReply,
+  getReviews,
+  createReview,
+  updateReview,
+  deleteReview,
+  toggleReviewVisibility,
+  Review,
 } from '../lib/turso';
 import { advancedAiPosts } from '../data/aiPosts';
 import AdminLogin from './AdminLogin';
@@ -66,7 +81,21 @@ import { BookOpen, PlusCircle } from 'lucide-react';
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'CynexAI@2026';
 
 const AdminPanel = () => {
-  const [activeTab, setActiveTab] = useState<'articles' | 'courses' | 'students' | 'payments' | 'tickets'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'courses' | 'students' | 'payments' | 'tickets' | 'reviews'>('articles');
+
+  // Reviews State
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [editingReview, setEditingReview] = useState<Review | null>(null);
+  const [reviewFormData, setReviewFormData] = useState<Omit<Review, 'id' | 'created_at'>>({
+    name: '',
+    role: '',
+    course: '',
+    rating: 5,
+    text: '',
+    image: '',
+    isVisible: true
+  });
 
   // Blog State
   const [posts, setPosts] = useState<Post[]>([]);
@@ -128,6 +157,7 @@ const AdminPanel = () => {
     phone: '',
     role: 'student'
   });
+  const [allocatedCourseId, setAllocatedCourseId] = useState('');
 
   // Enrollment State
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
@@ -138,6 +168,7 @@ const AdminPanel = () => {
   // Payment & Enrollment State
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [paymentFormData, setPaymentFormData] = useState({
     student_id: '',
     total_amount: 0,
@@ -148,6 +179,16 @@ const AdminPanel = () => {
 
   // Support State
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [ticketReplies, setTicketReplies] = useState<SupportReply[]>([]);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [repliesLoading, setRepliesLoading] = useState(false);
+  const [isAdminTicketModalOpen, setIsAdminTicketModalOpen] = useState(false);
+  const [adminTicketFormData, setAdminTicketFormData] = useState({
+    student_id: '',
+    category: 'Course Content',
+    description: ''
+  });
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,9 +215,19 @@ const AdminPanel = () => {
       fetchPayments();
       fetchTickets();
       fetchAllEnrollments();
+      fetchReviews();
     };
     init();
   }, []);
+
+  const fetchReviews = async () => {
+    try {
+      const fetchedReviews = await getReviews(true);
+      setReviews(fetchedReviews);
+    } catch {
+      setError('Failed to fetch testimonials');
+    }
+  };
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -239,11 +290,163 @@ const AdminPanel = () => {
     try {
       await updateSupportStatus(id, 'resolved');
       setTickets(tickets.map(t => t.id === id ? { ...t, status: 'resolved' } : t));
+      if (selectedTicket && selectedTicket.id === id) {
+        setSelectedTicket({ ...selectedTicket, status: 'resolved' });
+      }
       setSuccess('Ticket marked as resolved');
     } catch {
       setError('Failed to update ticket');
     }
   };
+
+  const handleOpenTicketChat = async (ticket: SupportTicket) => {
+    setSelectedTicket(ticket);
+    setRepliesLoading(true);
+    try {
+      const replies = await getSupportReplies(ticket.id);
+      setTicketReplies(replies);
+    } catch (error) {
+      console.error("Failed to load ticket replies", error);
+    } finally {
+      setRepliesLoading(false);
+    }
+  };
+
+  const handleSendAdminReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket || !replyMessage.trim()) return;
+
+    try {
+      const newReply = {
+        id: crypto.randomUUID(),
+        ticket_id: selectedTicket.id,
+        sender_id: 'admin',
+        sender_name: 'CynexAI Support',
+        sender_role: 'admin' as const,
+        message: replyMessage.trim()
+      };
+      await createSupportReply(newReply);
+      setTicketReplies([...ticketReplies, { ...newReply, created_at: new Date().toISOString() }]);
+      setReplyMessage('');
+    } catch (error) {
+      alert("Failed to send message. Please try again.");
+    }
+  };
+
+  const handleCreateAdminTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminTicketFormData.student_id || !adminTicketFormData.description.trim()) {
+      setError('Please select a student and provide ticket details.');
+      return;
+    }
+
+    try {
+      const newTicket = {
+        id: crypto.randomUUID(),
+        student_id: adminTicketFormData.student_id,
+        category: adminTicketFormData.category,
+        description: adminTicketFormData.description.trim(),
+        status: 'open' as const
+      };
+      await createSupportTicket(newTicket);
+      setTickets([{ ...newTicket, created_at: new Date().toISOString() }, ...tickets]);
+      setIsAdminTicketModalOpen(false);
+      setAdminTicketFormData({
+        student_id: '',
+        category: 'Course Content',
+        description: ''
+      });
+      setSuccess('Support ticket created successfully on behalf of the student.');
+    } catch (err) {
+      setError('Failed to log new support ticket.');
+    }
+  };
+
+  const handleOpenReviewModal = (review?: Review) => {
+    if (review) {
+      setEditingReview(review);
+      setReviewFormData({
+        name: review.name,
+        role: review.role,
+        course: review.course,
+        rating: review.rating,
+        text: review.text,
+        image: review.image,
+        isVisible: review.isVisible
+      });
+    } else {
+      setEditingReview(null);
+      setReviewFormData({
+        name: '',
+        role: '',
+        course: '',
+        rating: 5,
+        text: '',
+        image: '',
+        isVisible: true
+      });
+    }
+    setIsReviewModalOpen(true);
+    setError(null);
+  };
+
+  const handleReviewFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setError(null);
+
+    try {
+      if (editingReview) {
+        await updateReview({
+          ...reviewFormData,
+          id: editingReview.id
+        });
+        setSuccess('Testimonial updated successfully');
+      } else {
+        const newReview: Review = {
+          ...reviewFormData,
+          id: 'rev_' + Date.now()
+        };
+        await createReview(newReview);
+        setSuccess('Testimonial created successfully');
+      }
+      setIsReviewModalOpen(false);
+      fetchReviews();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      console.error('Submit Error:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setError(editingReview
+        ? `Update Failed: ${message}`
+        : `Creation Failed: ${message}`
+      );
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleToggleReviewVisibility = async (id: string, currentVisibility: boolean) => {
+    try {
+      await toggleReviewVisibility(id, !currentVisibility);
+      setReviews(reviews.map(r => r.id === id ? { ...r, isVisible: !currentVisibility } : r));
+    } catch {
+      setError('Failed to toggle visibility');
+    }
+  };
+
+  const handleDeleteReview = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this testimonial?')) return;
+
+    try {
+      await deleteReview(id);
+      setReviews(reviews.filter(r => r.id !== id));
+      setSuccess('Testimonial deleted successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch {
+      setError('Failed to delete testimonial');
+    }
+  };
+
   const handleOpenModal = (post?: Post) => {
     if (post) {
       setEditingPost(post);
@@ -447,6 +650,9 @@ const AdminPanel = () => {
         phone: student.phone || '',
         role: student.role
       });
+      // Find existing enrollment if any
+      const existingEnrollment = allEnrollments.find(e => e.student_id === student.id);
+      setAllocatedCourseId(existingEnrollment ? existingEnrollment.course_id : '');
     } else {
       setEditingStudent(null);
       setStudentFormData({
@@ -456,6 +662,7 @@ const AdminPanel = () => {
         phone: '',
         role: 'student'
       });
+      setAllocatedCourseId(courses.length > 0 ? courses[0].id : '');
     }
     setIsStudentModalOpen(true);
     setError(null);
@@ -478,14 +685,49 @@ const AdminPanel = () => {
            delete userPayload.password_hash; // Don't override if empty during edit
         }
         await updateUser(userPayload);
+
+        // Update or create enrollment for edited student
+        const existingEnrollment = allEnrollments.find(enr => enr.student_id === editingStudent.id);
+        if (allocatedCourseId) {
+          if (existingEnrollment) {
+            if (existingEnrollment.course_id !== allocatedCourseId) {
+              await createEnrollment({
+                ...existingEnrollment,
+                course_id: allocatedCourseId
+              });
+            }
+          } else {
+            const newEnrollment: Enrollment = {
+              id: `enr_${Date.now()}`,
+              student_id: editingStudent.id,
+              course_id: allocatedCourseId,
+              progress_percentage: 0,
+              status: 'active'
+            };
+            await createEnrollment(newEnrollment);
+          }
+        }
         setSuccess('Student updated successfully');
       } else {
         if (!studentFormData.password_hash) userPayload.password_hash = 'default123';
         await createUser(userPayload);
+
+        // Automatically enroll in allocated course on creation
+        if (allocatedCourseId) {
+          const newEnrollment: Enrollment = {
+            id: `enr_${Date.now()}`,
+            student_id: userPayload.id,
+            course_id: allocatedCourseId,
+            progress_percentage: 0,
+            status: 'active'
+          };
+          await createEnrollment(newEnrollment);
+        }
         setSuccess('Student created successfully');
       }
       setIsStudentModalOpen(false);
       fetchStudents();
+      fetchAllEnrollments();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: unknown) {
       setError(`Student Operation Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -539,6 +781,7 @@ const AdminPanel = () => {
 
   // --- PAYMENT HANDLERS ---
   const handleOpenPaymentModal = () => {
+    setEditingPayment(null);
     setPaymentFormData({
       student_id: students.length > 0 ? students[0].id : '',
       total_amount: 0,
@@ -550,20 +793,70 @@ const AdminPanel = () => {
     setError(null);
   };
 
+  const handleOpenEditPaymentModal = (payment: Payment) => {
+    setEditingPayment(payment);
+    setPaymentFormData({
+      student_id: payment.student_id,
+      total_amount: payment.total_amount,
+      amount_paid: payment.amount_paid,
+      due_date: payment.due_date ? payment.due_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      status: payment.status
+    });
+    setIsPaymentModalOpen(true);
+    setError(null);
+  };
+
+  const handleDeletePayment = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this payment record?')) return;
+    try {
+      await deletePayment(id);
+      setSuccess('Payment record deleted successfully');
+      fetchPayments();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      setError(`Delete Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleTogglePaymentVisibility = async (id: string, isVisible: boolean) => {
+    try {
+      await togglePaymentVisibility(id, !isVisible);
+      setSuccess(isVisible ? 'Payment hidden from student' : 'Payment made visible to student');
+      fetchPayments();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      setError(`Failed to toggle visibility: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
   const handlePaymentFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
     setError(null);
 
-    const newPayment: Payment = {
-      ...paymentFormData,
-      id: `pay_${Date.now()}`
-    };
-
     try {
-      await createPayment(newPayment);
-      setSuccess('Payment recorded successfully');
+      if (editingPayment) {
+        await updatePayment({
+          id: editingPayment.id,
+          student_id: paymentFormData.student_id,
+          total_amount: paymentFormData.total_amount,
+          amount_paid: paymentFormData.amount_paid,
+          due_date: paymentFormData.due_date,
+          status: paymentFormData.status,
+          isVisible: editingPayment.isVisible
+        });
+        setSuccess('Payment updated successfully');
+      } else {
+        const newPayment: Payment = {
+          ...paymentFormData,
+          id: `pay_${Date.now()}`,
+          isVisible: true
+        };
+        await createPayment(newPayment);
+        setSuccess('Payment recorded successfully');
+      }
       setIsPaymentModalOpen(false);
+      setEditingPayment(null);
       fetchPayments();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: unknown) {
@@ -697,6 +990,7 @@ const AdminPanel = () => {
               {activeTab === 'students' && 'Manage student enrollments and profiles.'}
               {activeTab === 'payments' && 'Track student payments and EMI installments.'}
               {activeTab === 'tickets' && 'Respond to student helpdesk requests.'}
+              {activeTab === 'reviews' && 'Manage graduate success stories and testimonials.'}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -714,21 +1008,25 @@ const AdminPanel = () => {
                 else if (activeTab === 'courses') handleOpenCourseModal();
                 else if (activeTab === 'students') handleOpenStudentModal();
                 else if (activeTab === 'payments') handleOpenPaymentModal();
+                else if (activeTab === 'tickets') setIsAdminTicketModalOpen(true);
+                else if (activeTab === 'reviews') handleOpenReviewModal();
               }}
               className="inline-flex items-center px-6 py-3 bg-[#41c8df] hover:bg-[#38b2c7] text-black font-bold rounded-xl transition-all shadow-lg hover:shadow-[#41c8df]/20 active:scale-95"
-              title={`Create New ${activeTab.slice(0, -1)}`}
+              title={activeTab === 'tickets' ? 'Create Support Ticket' : activeTab === 'reviews' ? 'Add Success Story' : `Create New ${activeTab.slice(0, -1)}`}
             >
               <Plus className="w-5 h-5 mr-2" />
               {activeTab === 'articles' && 'New Article'}
               {activeTab === 'courses' && 'New Course'}
               {activeTab === 'students' && 'New Student'}
               {activeTab === 'payments' && 'Record Payment'}
+              {activeTab === 'tickets' && 'Create Ticket'}
+              {activeTab === 'reviews' && 'New Success Story'}
             </button>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center space-x-1 mb-8 bg-secondary/5 p-1 rounded-2xl w-fit border border-secondary/10">
+        <div className="flex items-center space-x-1 mb-8 bg-secondary/5 p-1 rounded-2xl w-fit border border-secondary/10 flex-wrap gap-y-2">
           <button
             onClick={() => setActiveTab('articles')}
             className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'articles' ? 'bg-[#41c8df] text-black shadow-lg' : 'text-gray-400 hover:text-secondary'}`}
@@ -765,6 +1063,14 @@ const AdminPanel = () => {
           >
             <MessageSquare className="w-4 h-4 mr-2" />
             Support
+          </button>
+          <button
+            onClick={() => setActiveTab('reviews')}
+            className={`flex items-center px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'reviews' ? 'bg-[#41c8df] text-black shadow-lg' : 'text-gray-400 hover:text-secondary'}`}
+            title="Manage Success Stories"
+          >
+            <Star className="w-4 h-4 mr-2" />
+            Success Stories
           </button>
         </div>
 
@@ -1090,15 +1396,17 @@ const AdminPanel = () => {
                 <thead className="bg-secondary/5 border-b border-secondary/10">
                   <tr>
                     <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Payment ID</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Student</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Student ID</th>
                     <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Amount</th>
                     <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Visibility</th>
+                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {payments.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
                         <div className="flex flex-col items-center gap-2">
                           <FileText className="w-12 h-12 text-gray-100 mb-2" />
                           <span className="text-sm font-medium">No payments found.</span>
@@ -1110,18 +1418,56 @@ const AdminPanel = () => {
                       <tr key={payment.id} className="hover:bg-secondary/5 transition-colors group">
                         <td className="px-6 py-4 text-sm text-secondary font-medium">{payment.id}</td>
                         <td className="px-6 py-4 text-sm text-gray-300">{payment.student_id}</td>
-                        <td className="px-6 py-4 text-sm text-secondary font-bold">${payment.amount_paid} / ${payment.total_amount}</td>
+                        <td className="px-6 py-4 text-sm text-secondary font-bold">₹{payment.amount_paid} / ₹{payment.total_amount}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${payment.status === 'paid' ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'}`}>
                             {payment.status}
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {payment.isVisible !== false ? (
+                            <span className="flex items-center text-xs font-bold text-cyan-500">
+                              <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 mr-2" />
+                              VISIBLE
+                            </span>
+                          ) : (
+                            <span className="flex items-center text-xs font-bold text-gray-400">
+                              <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2" />
+                              HIDDEN
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleTogglePaymentVisibility(payment.id, payment.isVisible !== false)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title={payment.isVisible !== false ? "Hide Payment" : "Show Payment"}
+                            >
+                              {payment.isVisible !== false ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditPaymentModal(payment)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title="Edit Payment"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePayment(payment.id)}
+                              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
+                              title="Delete Payment"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
-            ) : (
+            ) : activeTab === 'tickets' ? (
               <table className="w-full text-left">
                 <thead className="bg-secondary/5 border-b border-secondary/10">
                   <tr>
@@ -1144,10 +1490,14 @@ const AdminPanel = () => {
                     </tr>
                   ) : (
                     tickets.map(ticket => (
-                      <tr key={ticket.id} className="hover:bg-secondary/5 transition-colors group">
+                      <tr 
+                        key={ticket.id} 
+                        onClick={() => handleOpenTicketChat(ticket)}
+                        className="hover:bg-white/5 cursor-pointer transition-colors group"
+                      >
                         <td className="px-6 py-4">
-                          <div className="text-sm font-bold text-secondary">{ticket.id.substring(0,8)}...</div>
-                          <div className="text-xs text-gray-500 truncate max-w-[200px]">{ticket.description}</div>
+                          <div className="text-sm font-bold text-secondary group-hover:text-[#41c8df] transition-colors">{ticket.id.substring(0,8)}...</div>
+                          <div className="text-xs text-gray-400 group-hover:text-gray-200 transition-colors truncate max-w-[200px]">{ticket.description}</div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-300 font-medium">{ticket.student_id}</td>
                         <td className="px-6 py-4">
@@ -1162,16 +1512,108 @@ const AdminPanel = () => {
                             {ticket.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right space-x-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenTicketChat(ticket);
+                            }}
+                            className="text-xs font-bold text-secondary hover:underline"
+                          >
+                            Open Chat
+                          </button>
                           {ticket.status === 'open' && (
                             <button
-                              onClick={() => handleResolveTicket(ticket.id)}
-                              className="text-xs font-bold text-[#41c8df] hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleResolveTicket(ticket.id);
+                              }}
+                              className="text-xs font-bold text-emerald-400 hover:underline border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 rounded-md"
                               title="Resolve Ticket"
                             >
-                              Mark Resolved
+                              Resolve
                             </button>
                           )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full text-left">
+                <thead className="bg-secondary/5 border-b border-secondary/10">
+                  <tr>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Student Name</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Role & Company</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Course</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {reviews.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <Star className="w-8 h-8 text-secondary/30 animate-pulse" />
+                          <span className="text-sm font-medium">No testimonials found</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    reviews.map((rev) => (
+                      <tr key={rev.id} className="hover:bg-white/5 transition-all">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full border border-[#41c8df]/30 overflow-hidden flex-shrink-0 bg-[#41c8df]/10 flex items-center justify-center text-secondary font-bold">
+                              {rev.image ? (
+                                <img src={rev.image} alt={rev.name} className="w-full h-full object-cover" />
+                              ) : (
+                                rev.name.charAt(0)
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-semibold text-secondary block">{rev.name}</span>
+                              <span className="text-xs text-[#41c8df]">{Array(rev.rating).fill('★').join('')}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-300 font-medium">
+                          {rev.role}
+                        </td>
+                        <td className="px-6 py-4 text-gray-300">
+                          {rev.course}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${rev.isVisible ? 'bg-green-400/10 text-green-400' : 'bg-gray-400/10 text-gray-400'}`}>
+                            {rev.isVisible ? 'Visible' : 'Hidden'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleToggleReviewVisibility(rev.id, rev.isVisible)}
+                              className={`p-2 rounded-lg border transition-all ${rev.isVisible ? 'text-gray-400 hover:text-gray-200 hover:bg-white/10 border-transparent' : 'text-[#41c8df] hover:bg-[#41c8df]/10 border-transparent'}`}
+                              title={rev.isVisible ? "Hide Success Story" : "Show Success Story"}
+                            >
+                              {rev.isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                            <button
+                              onClick={() => handleOpenReviewModal(rev)}
+                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
+                              title="Edit Success Story"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteReview(rev.id)}
+                              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
+                              title="Delete Success Story"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1748,6 +2190,24 @@ const AdminPanel = () => {
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
+                    <label htmlFor="student-course" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Allocated Course *</label>
+                    <select
+                      id="student-course"
+                      required
+                      value={allocatedCourseId}
+                      onChange={(e) => setAllocatedCourseId(e.target.value)}
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
+                      title="Allocated Course"
+                    >
+                      <option value="" disabled>Select a course</option>
+                      {courses.map(course => (
+                        <option key={course.id} value={course.id}>
+                          {course.title} ({course.level})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
                     <label htmlFor="student-role" className="text-xs font-bold text-gray-400 uppercase tracking-wider">System Role</label>
                     <select
                       id="student-role"
@@ -1786,9 +2246,11 @@ const AdminPanel = () => {
 
               <h2 className="text-2xl font-display font-bold text-secondary mb-2 flex items-center gap-3">
                 <FileText className="text-[#41c8df]" />
-                Record Payment
+                {editingPayment ? 'Edit Payment Record' : 'Record Payment'}
               </h2>
-              <p className="text-sm text-gray-400 mb-8">Log a fee payment or EMI installment for a student.</p>
+              <p className="text-sm text-gray-400 mb-8">
+                {editingPayment ? 'Modify the details of this fee payment or EMI installment.' : 'Log a fee payment or EMI installment for a student.'}
+              </p>
 
               {error && (
                 <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
@@ -1890,7 +2352,7 @@ const AdminPanel = () => {
                 <div className="border-t border-secondary/10 pt-6 flex flex-col sm:flex-row items-center justify-end gap-4">
                   <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase text-xs">Cancel</button>
                   <button type="submit" disabled={formLoading} className="px-10 py-4 bg-[#41c8df] text-black font-black uppercase text-xs rounded-2xl transition-all shadow-xl disabled:opacity-50">
-                    {formLoading ? 'Saving...' : 'Record Payment'}
+                    {formLoading ? 'Saving...' : editingPayment ? 'Save Changes' : 'Record Payment'}
                   </button>
                 </div>
               </form>
@@ -1898,6 +2360,440 @@ const AdminPanel = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedTicket && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedTicket(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-background/90 backdrop-blur-2xl border border-secondary/20 rounded-[2.5rem] p-8 w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+            >
+              <button 
+                onClick={() => setSelectedTicket(null)} 
+                className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all" 
+                title="Close Modal"
+              >
+                <X size={20} />
+              </button>
+
+              <h2 className="text-2xl font-display font-bold text-secondary mb-1 flex items-center gap-3">
+                <MessageSquare className="text-[#41c8df]" />
+                Support Conversation
+              </h2>
+              <div className="flex items-center gap-3 mb-6">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#41c8df] bg-[#41c8df]/10 px-3 py-1 rounded-md">
+                  {selectedTicket.category}
+                </span>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                  selectedTicket.status === 'resolved' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                }`}>
+                  {selectedTicket.status}
+                </span>
+                {selectedTicket.status === 'open' && (
+                  <button
+                    onClick={() => handleResolveTicket(selectedTicket.id)}
+                    className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md hover:bg-emerald-500/20 transition-all ml-auto"
+                  >
+                    Mark Resolved
+                  </button>
+                )}
+              </div>
+
+              {/* Chat Thread */}
+              <div className="flex-1 overflow-y-auto p-6 bg-white/5 rounded-2xl border border-white/5 space-y-6 mb-6">
+                {/* Initial Query */}
+                <div className="flex flex-col items-start max-w-[85%]">
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-3">
+                    Student ID: {selectedTicket.student_id} (Initiator)
+                  </div>
+                  <div className="bg-[#41c8df]/10 text-white border border-[#41c8df]/20 px-5 py-3 rounded-2xl rounded-tl-none font-medium leading-relaxed">
+                    {selectedTicket.description}
+                  </div>
+                  <div className="text-[9px] text-gray-500 font-bold mt-1 ml-3">
+                    {new Date(selectedTicket.created_at).toLocaleString()}
+                  </div>
+                </div>
+
+                {repliesLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3 text-gray-400">
+                    <div className="w-6 h-6 border-2 border-[#41c8df] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Loading conversation thread...</span>
+                  </div>
+                ) : (
+                  ticketReplies.map(reply => {
+                    const isSelf = reply.sender_role === 'admin';
+                    return (
+                      <div 
+                        key={reply.id} 
+                        className={`flex flex-col ${isSelf ? 'items-end ml-auto max-w-[85%]' : 'items-start max-w-[85%]'}`}
+                      >
+                        <div className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isSelf ? 'text-emerald-400 mr-3' : 'text-gray-400 ml-3'}`}>
+                          {isSelf ? `${reply.sender_name} (You)` : `Student (${reply.sender_name})`}
+                        </div>
+                        <div className={`px-5 py-3 rounded-2xl font-medium shadow-sm leading-relaxed ${
+                          isSelf 
+                            ? 'bg-emerald-600 text-white rounded-tr-none' 
+                            : 'bg-white/10 text-white rounded-tl-none border border-white/5'
+                        }`}>
+                          {reply.message}
+                        </div>
+                        <div className={`text-[9px] text-gray-500 font-bold mt-1 ${isSelf ? 'mr-3' : 'ml-3'}`}>
+                          {new Date(reply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Chat Send Form */}
+              <form onSubmit={handleSendAdminReply} className="flex gap-4">
+                <input
+                  type="text"
+                  required
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  placeholder="Type admin reply here..."
+                  className="flex-1 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl px-5 py-4 outline-none text-secondary font-medium placeholder:text-gray-500 transition-all"
+                />
+                <button
+                  type="submit"
+                  className="px-6 py-4 bg-[#41c8df] text-black font-black uppercase text-xs rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md flex items-center gap-2"
+                >
+                  <Send size={14} /> Send Reply
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAdminTicketModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => setIsAdminTicketModalOpen(false)} 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+              className="relative bg-background/90 backdrop-blur-2xl border border-secondary/20 rounded-[2rem] p-8 w-full max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <button 
+                onClick={() => setIsAdminTicketModalOpen(false)} 
+                className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all" 
+                title="Close Modal"
+              >
+                <X size={20} />
+              </button>
+
+              <h2 className="text-2xl font-display font-bold text-secondary mb-2 flex items-center gap-3">
+                <MessageSquare className="text-[#41c8df]" />
+                Create Support Ticket
+              </h2>
+              <p className="text-sm text-gray-400 mb-8">Log a customer support or query ticket on behalf of a student.</p>
+
+              <form onSubmit={handleCreateAdminTicket} className="space-y-5">
+                <div className="space-y-2">
+                  <label htmlFor="admin-ticket-student" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Select Student *</label>
+                  <select
+                    id="admin-ticket-student"
+                    required
+                    value={adminTicketFormData.student_id}
+                    onChange={(e) => setAdminTicketFormData({ ...adminTicketFormData, student_id: e.target.value })}
+                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
+                    title="Select Student"
+                  >
+                    <option value="">-- Select Student --</option>
+                    {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.email})</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="admin-ticket-category" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Category *</label>
+                  <select
+                    id="admin-ticket-category"
+                    required
+                    value={adminTicketFormData.category}
+                    onChange={(e) => setAdminTicketFormData({ ...adminTicketFormData, category: e.target.value })}
+                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
+                    title="Ticket Category"
+                  >
+                    <option value="Course Content">Course Content</option>
+                    <option value="Payment / EMI">Payment / EMI</option>
+                    <option value="Technical Access">Technical Access</option>
+                    <option value="Certificate Request">Certificate Request</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="admin-ticket-desc" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Description / Issue details *</label>
+                  <textarea
+                    id="admin-ticket-desc"
+                    required
+                    rows={4}
+                    value={adminTicketFormData.description}
+                    onChange={(e) => setAdminTicketFormData({ ...adminTicketFormData, description: e.target.value })}
+                    placeholder="Enter support request details here..."
+                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-medium resize-none"
+                  />
+                </div>
+
+                <div className="border-t border-secondary/10 pt-6 flex flex-col sm:flex-row items-center justify-end gap-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsAdminTicketModalOpen(false)} 
+                    className="px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="px-10 py-4 bg-[#41c8df] text-black font-black uppercase text-xs rounded-2xl transition-all shadow-xl hover:scale-[1.02]"
+                  >
+                    Create Ticket
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Testimonial Form Modal */}
+      <AnimatePresence>
+        {isReviewModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsReviewModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-xl bg-background border border-secondary/20 rounded-[2.5rem] shadow-2xl overflow-hidden z-10"
+            >
+              <div className="px-8 py-6 border-b border-secondary/10 flex items-center justify-between bg-secondary/5">
+                <div>
+                  <h2 className="text-xl font-display font-bold text-secondary">
+                    {editingReview ? 'Edit Success Story' : 'New Success Story'}
+                  </h2>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
+                    {editingReview ? 'Modify student testimonial' : 'Add new student achievement'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setIsReviewModalOpen(false)} 
+                  className="text-gray-400 hover:text-secondary p-2 hover:bg-secondary/10 rounded-xl transition-all" 
+                  title="Close testimonial modal"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <form onSubmit={handleReviewFormSubmit} className="p-8 space-y-5 max-h-[75vh] overflow-y-auto">
+                <div className="space-y-2">
+                  <label htmlFor="review-student-name" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Student Name *</label>
+                  <input
+                    type="text"
+                    required
+                    id="review-student-name"
+                    value={reviewFormData.name}
+                    onChange={(e) => setReviewFormData({ ...reviewFormData, name: e.target.value })}
+                    placeholder="e.g. John Doe"
+                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-medium transition-all"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="review-role" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Role & Placement *</label>
+                  <input
+                    type="text"
+                    required
+                    id="review-role"
+                    value={reviewFormData.role}
+                    onChange={(e) => setReviewFormData({ ...reviewFormData, role: e.target.value })}
+                    placeholder="e.g. AI Engineer at Google"
+                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-medium transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="review-course" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Course *</label>
+                    <input
+                      type="text"
+                      required
+                      id="review-course"
+                      value={reviewFormData.course}
+                      onChange={(e) => setReviewFormData({ ...reviewFormData, course: e.target.value })}
+                      placeholder="e.g. Advanced AI Development"
+                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-medium transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="review-rating" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rating (1-5) *</label>
+                    <select
+                      id="review-rating"
+                      title="Select student rating from 1 to 5 stars"
+                      aria-label="Rating"
+                      value={reviewFormData.rating}
+                      onChange={(e) => setReviewFormData({ ...reviewFormData, rating: Number(e.target.value) })}
+                      className="w-full px-4 py-3 bg-background border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-medium transition-all text-white"
+                    >
+                      <option value="5">5 Stars</option>
+                      <option value="4">4 Stars</option>
+                      <option value="3">3 Stars</option>
+                      <option value="2">2 Stars</option>
+                      <option value="1">1 Star</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Image / Avatar</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="review-image-url" className="text-[10px] text-gray-500 font-bold block mb-1">PASTE IMAGE URL</label>
+                      <input
+                        type="url"
+                        id="review-image-url"
+                        value={reviewFormData.image}
+                        onChange={(e) => setReviewFormData({ ...reviewFormData, image: e.target.value })}
+                        placeholder="e.g. https://images.unsplash.com/photo-..."
+                        className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-medium transition-all text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="review-file-upload" className="text-[10px] text-gray-500 font-bold block mb-1">UPLOAD LOCAL FILE</label>
+                      <div className="relative flex items-center justify-center border border-dashed border-secondary/20 hover:border-[#41c8df] rounded-xl bg-secondary/5 h-[46px] transition-all cursor-pointer overflow-hidden group">
+                        <input
+                          type="file"
+                          id="review-file-upload"
+                          title="Upload local image file"
+                          placeholder="Select local image file"
+                          aria-label="Upload local image file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 2 * 1024 * 1024) {
+                                alert('File is too large! Please choose an image smaller than 2MB.');
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setReviewFormData({ ...reviewFormData, image: reader.result as string });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                        />
+                        <div className="flex items-center gap-2 text-xs text-gray-400 group-hover:text-[#41c8df] font-bold">
+                          <ImageIcon size={16} />
+                          <span>Choose Image...</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {reviewFormData.image && (
+                    <div className="mt-2 flex items-center gap-3 bg-secondary/5 border border-secondary/10 p-2.5 rounded-xl">
+                      <div className="w-10 h-10 rounded-full overflow-hidden border border-[#41c8df]/30 bg-background flex-shrink-0 flex items-center justify-center">
+                        <img src={reviewFormData.image} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs text-gray-400 block font-bold">PREVIEW SELECTED IMAGE</span>
+                        <span className="text-[10px] text-[#41c8df] truncate block font-medium">
+                          {reviewFormData.image.startsWith('data:') ? 'Local file uploaded successfully (Base64)' : reviewFormData.image}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReviewFormData({ ...reviewFormData, image: '' })}
+                        className="text-gray-400 hover:text-red-500 text-xs font-bold uppercase transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="review-text" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Success Quote / Review *</label>
+                  <textarea
+                    required
+                    id="review-text"
+                    rows={4}
+                    value={reviewFormData.text}
+                    onChange={(e) => setReviewFormData({ ...reviewFormData, text: e.target.value })}
+                    placeholder="Describe their transformation or experience..."
+                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-medium resize-none transition-all"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 py-2">
+                  <input
+                    type="checkbox"
+                    id="rev-isVisible"
+                    checked={reviewFormData.isVisible}
+                    onChange={(e) => setReviewFormData({ ...reviewFormData, isVisible: e.target.checked })}
+                    className="w-5 h-5 rounded border-secondary/10 bg-secondary/5 text-[#41c8df] focus:ring-0 focus:ring-offset-0"
+                  />
+                  <label htmlFor="rev-isVisible" className="text-sm font-bold text-gray-300 cursor-pointer">
+                    Show on website homepage success stories
+                  </label>
+                </div>
+
+                {error && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-semibold flex items-center gap-2">
+                    <AlertCircle size={18} />
+                    {error}
+                  </div>
+                )}
+
+                <div className="border-t border-secondary/10 pt-5 flex flex-col sm:flex-row items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsReviewModalOpen(false)}
+                    className="w-full sm:w-auto px-6 py-3 text-gray-400 hover:text-secondary font-bold uppercase text-xs transition-colors bg-transparent border-none outline-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={formLoading}
+                    className="w-full sm:w-auto px-10 py-3 bg-[#41c8df] text-black font-black uppercase text-xs rounded-2xl transition-all shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:scale-100 cursor-pointer"
+                  >
+                    {formLoading ? 'Saving...' : editingReview ? 'Save Changes' : 'Publish Success Story'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
 
       {/* Advanced Diagnostics Section */}
       <div className="max-w-7xl mx-auto mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 mb-12 relative z-10">

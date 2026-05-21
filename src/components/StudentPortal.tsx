@@ -4,7 +4,7 @@ import {
   LogOut, BookOpen, Clock, PlayCircle, 
   CreditCard, Info, CheckCircle2, 
   Calendar, Wallet, LayoutDashboard,
-  Trophy, ShieldCheck, Plus, X, Compass, Star
+  Trophy, ShieldCheck, Plus, X, Send
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -12,7 +12,9 @@ import {
   getPaymentsByStudent, getSupportTickets,
   createSupportTicket, getLessonsByCourse,
   getStudentChecklist, updateChecklistStep,
-  Course, Enrollment, Payment, SupportTicket, Lesson, OnboardingStep
+  getSupportReplies, createSupportReply,
+  getBadges,
+  Course, Enrollment, Payment, SupportTicket, Lesson, OnboardingStep, SupportReply, Badge
 } from '../lib/turso';
 import StudentDashboard from './StudentDashboard';
 import CoursePlayer from './CoursePlayer';
@@ -20,17 +22,21 @@ import Achievements from './Achievements';
 
 const StudentPortal = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'achievements' | 'finance' | 'support' | 'explore'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'achievements' | 'finance' | 'support'>('dashboard');
   const [studentName, setStudentName] = useState('');
   const [studentId, setStudentId] = useState('');
   const [enrollments, setEnrollments] = useState<{ enrollment: Enrollment; course: Course }[]>([]);
-  const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [checklist, setChecklist] = useState<OnboardingStep[]>([]);
+  const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [ticketFormData, setTicketFormData] = useState({ category: 'Course Content', description: '' });
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [ticketReplies, setTicketReplies] = useState<SupportReply[]>([]);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [repliesLoading, setRepliesLoading] = useState(false);
   
   // Content Player State
   const [selectedCourseData, setSelectedCourseData] = useState<{ course: Course; enrollment: Enrollment; lessons: Lesson[] } | null>(null);
@@ -40,7 +46,6 @@ const StudentPortal = () => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'courses', label: 'My Courses', icon: BookOpen },
     { id: 'achievements', label: 'Achievements', icon: Trophy },
-    { id: 'explore', label: 'Explore Programs', icon: Compass },
     { id: 'finance', label: 'Finance & Payments', icon: CreditCard },
     { id: 'support', label: 'Help & Support', icon: Info },
   ];
@@ -63,15 +68,16 @@ const StudentPortal = () => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [studentEnrollments, allCoursesData, studentPayments, studentTickets, studentChecklist] = await Promise.all([
+        const [studentEnrollments, allCoursesData, studentPayments, studentTickets, studentChecklist, studentBadges] = await Promise.all([
           getEnrollmentsByStudent(id),
           getCourses(true),
           getPaymentsByStudent(id),
           getSupportTickets(id),
-          getStudentChecklist(id)
+          getStudentChecklist(id),
+          getBadges(id)
         ]);
 
-        setAllCourses(allCoursesData);
+        setBadges(studentBadges);
 
         const enriched = studentEnrollments.map(enr => {
           const course = allCoursesData.find(c => c.id === enr.course_id);
@@ -145,6 +151,40 @@ const StudentPortal = () => {
       setTicketFormData({ category: 'Course Content', description: '' });
     } catch (error) {
       alert("Failed to submit ticket. Please try again.");
+    }
+  };
+
+  const handleOpenTicketChat = async (ticket: SupportTicket) => {
+    setSelectedTicket(ticket);
+    setRepliesLoading(true);
+    try {
+      const replies = await getSupportReplies(ticket.id);
+      setTicketReplies(replies);
+    } catch (error) {
+      console.error("Failed to load ticket replies", error);
+    } finally {
+      setRepliesLoading(false);
+    }
+  };
+
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket || !replyMessage.trim()) return;
+
+    try {
+      const newReply = {
+        id: crypto.randomUUID(),
+        ticket_id: selectedTicket.id,
+        sender_id: studentId,
+        sender_name: studentName,
+        sender_role: 'student' as const,
+        message: replyMessage.trim()
+      };
+      await createSupportReply(newReply);
+      setTicketReplies([...ticketReplies, { ...newReply, created_at: new Date().toISOString() }]);
+      setReplyMessage('');
+    } catch (error) {
+      alert("Failed to send message. Please try again.");
     }
   };
 
@@ -230,6 +270,7 @@ const StudentPortal = () => {
                     studentName={studentName}
                     enrollments={enrollments}
                     checklist={checklist}
+                    badges={badges}
                     onUpdateChecklist={handleUpdateChecklist}
                     setActiveTab={setActiveTab}
                     onNavigate={setActiveTab}
@@ -328,14 +369,14 @@ const StudentPortal = () => {
                         <Wallet size={28} />
                       </div>
                       <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Total Paid</p>
-                      <h4 className="text-4xl font-black text-slate-900">${totalPaid}</h4>
+                      <h4 className="text-4xl font-black text-slate-900">₹{totalPaid.toLocaleString()}</h4>
                     </div>
                     <div className="bg-orange-50 border border-orange-100 p-8 rounded-[2.5rem]">
                       <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-orange-500 mb-6 shadow-sm border border-orange-50">
                         <Calendar size={28} />
                       </div>
                       <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Upcoming EMI</p>
-                      <h4 className="text-4xl font-black text-slate-900">${totalDue}</h4>
+                      <h4 className="text-4xl font-black text-slate-900">₹{totalDue.toLocaleString()}</h4>
                     </div>
                     <div className="bg-[#41c8df]/5 border border-[#41c8df]/10 p-8 rounded-[2.5rem]">
                       <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-[#41c8df] mb-6 shadow-sm border-[#41c8df]/10">
@@ -365,7 +406,7 @@ const StudentPortal = () => {
                           {payments.map(p => (
                             <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                               <td className="px-10 py-6 text-sm font-mono text-slate-400">{p.id.substring(0, 16)}</td>
-                              <td className="px-10 py-6 text-sm font-black text-slate-900">${p.amount_paid}</td>
+                              <td className="px-10 py-6 text-sm font-black text-slate-900">₹{p.amount_paid.toLocaleString()}</td>
                               <td className="px-10 py-6 text-sm text-slate-500">{new Date(p.due_date).toLocaleDateString()}</td>
                               <td className="px-10 py-6 text-right">
                                 <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
@@ -405,13 +446,17 @@ const StudentPortal = () => {
 
                   <div className="grid grid-cols-1 gap-4">
                     {tickets.map(ticket => (
-                      <div key={ticket.id} className="bg-white border border-slate-200 p-8 rounded-[2.5rem] hover:border-[#41c8df] transition-all shadow-sm">
+                      <div 
+                        key={ticket.id} 
+                        onClick={() => handleOpenTicketChat(ticket)}
+                        className="bg-white border border-slate-200 p-8 rounded-[2.5rem] hover:border-[#41c8df] hover:scale-[1.01] cursor-pointer transition-all shadow-sm group"
+                      >
                         <div className="flex items-start justify-between mb-6">
                           <div className="space-y-3">
                             <span className="text-[10px] font-black uppercase tracking-widest text-[#41c8df] bg-[#41c8df]/10 px-3 py-1.5 rounded-lg border border-[#41c8df]/20">
                               {ticket.category}
                             </span>
-                            <h4 className="text-xl font-bold text-slate-900">{ticket.description}</h4>
+                            <h4 className="text-xl font-bold text-slate-900 group-hover:text-[#41c8df] transition-colors">{ticket.description}</h4>
                           </div>
                           <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
                             ticket.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
@@ -426,58 +471,11 @@ const StudentPortal = () => {
                           <div className="flex items-center gap-2">
                             <Info size={14} /> Ref: {ticket.id.substring(0, 8)}
                           </div>
+                          <span className="text-[10px] text-[#41c8df] opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wider font-black ml-auto flex items-center gap-1">
+                            Open Chat &rarr;
+                          </span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'explore' && (
-                <motion.div
-                  key="explore"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  <div className="mb-8 lg:mb-12">
-                    <h3 className="text-3xl lg:text-4xl font-black text-slate-900 mb-2">Explore Our Programs</h3>
-                    <p className="text-base lg:text-lg text-slate-500 font-medium">Master the world's most advanced technologies with industry-led certifications.</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {allCourses.filter((c: Course) => !enrollments.some((e: { enrollment: Enrollment; course: Course }) => e.course.id === c.id)).map((course: Course) => (
-                      <motion.div 
-                        key={course.id}
-                        whileHover={{ y: -5 }}
-                        className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden hover:border-[#41c8df] transition-all group shadow-sm"
-                      >
-                        <div className="h-48 relative overflow-hidden">
-                          <img src={course.image} alt={course.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                          <div className="absolute top-4 left-4">
-                            <span className="px-3 py-1 bg-white/90 backdrop-blur-md text-slate-900 text-[10px] font-black rounded-lg uppercase tracking-widest shadow-sm">
-                              {course.level}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="p-8">
-                          <h4 className="text-xl font-bold text-slate-900 mb-2">{course.title}</h4>
-                          <p className="text-slate-500 text-sm line-clamp-2 mb-6">{course.description}</p>
-                          <div className="flex items-center justify-between mb-8">
-                             <div className="flex items-center text-xs font-bold text-slate-400">
-                               <Clock className="w-3.5 h-3.5 mr-1.5 text-[#41c8df]" />
-                               {course.duration}
-                             </div>
-                             <div className="flex items-center text-xs font-bold text-emerald-600">
-                               <Star className="w-3.5 h-3.5 mr-1.5 fill-current" />
-                               {course.rating} Rating
-                             </div>
-                          </div>
-                          <button className="w-full py-4 bg-slate-50 text-slate-900 font-bold rounded-2xl group-hover:bg-slate-900 group-hover:text-white transition-all shadow-sm">
-                            View Details
-                          </button>
-                        </div>
-                      </motion.div>
                     ))}
                   </div>
                 </motion.div>
@@ -570,6 +568,117 @@ const StudentPortal = () => {
                   Submit Ticket
                 </button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedTicket && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedTicket(null)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 40 }}
+              className="bg-white border border-slate-200 w-full max-w-2xl rounded-[3rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="px-10 py-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#41c8df] bg-[#41c8df]/10 px-3 py-1 rounded-lg border border-[#41c8df]/20">
+                      {selectedTicket.category}
+                    </span>
+                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                      selectedTicket.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {selectedTicket.status}
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-900 truncate max-w-[400px]">Ref: {selectedTicket.id.substring(0, 16)}</h2>
+                </div>
+                <button 
+                  onClick={() => setSelectedTicket(null)} 
+                  className="p-3 bg-white border border-slate-100 text-slate-400 hover:text-slate-900 rounded-2xl shadow-sm transition-all"
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Chat Messages */}
+              <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/30">
+                {/* Initial Query Bubble */}
+                <div className="flex flex-col items-start max-w-[80%]">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-3">
+                    {studentName} (You)
+                  </div>
+                  <div className="bg-indigo-600 text-white px-6 py-4 rounded-[2rem] rounded-tl-none font-medium shadow-sm leading-relaxed">
+                    {selectedTicket.description}
+                  </div>
+                  <div className="text-[9px] text-slate-400 font-bold mt-1 ml-3">
+                    {new Date(selectedTicket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+
+                {repliesLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-400">
+                    <div className="w-6 h-6 border-2 border-[#41c8df] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Loading conversation...</span>
+                  </div>
+                ) : (
+                  ticketReplies.map(reply => {
+                    const isSelf = reply.sender_role === 'student';
+                    return (
+                      <div 
+                        key={reply.id} 
+                        className={`flex flex-col ${isSelf ? 'items-start max-w-[80%]' : 'items-end ml-auto max-w-[80%]'}`}
+                      >
+                        <div className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isSelf ? 'text-slate-400 ml-3' : 'text-emerald-500 mr-3'}`}>
+                          {isSelf ? reply.sender_name : `${reply.sender_name} (Staff Mentor)`}
+                        </div>
+                        <div className={`px-6 py-4 rounded-[2rem] font-medium shadow-sm leading-relaxed ${
+                          isSelf 
+                            ? 'bg-indigo-600 text-white rounded-tl-none' 
+                            : 'bg-emerald-600 text-white rounded-tr-none'
+                        }`}>
+                          {reply.message}
+                        </div>
+                        <div className={`text-[9px] text-slate-400 font-bold mt-1 ${isSelf ? 'ml-3' : 'mr-3'}`}>
+                          {new Date(reply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Chat Input */}
+              <div className="p-8 border-t border-slate-100 bg-white">
+                <form onSubmit={handleSendReply} className="flex gap-4">
+                  <input
+                    type="text"
+                    required
+                    value={replyMessage}
+                    onChange={(e) => setReplyMessage(e.target.value)}
+                    placeholder="Type your reply here..."
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 focus:border-[#41c8df] outline-none text-slate-900 font-medium placeholder:text-slate-300 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    className="px-6 py-4 bg-slate-900 text-white font-bold rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md shadow-slate-900/10 flex items-center gap-2"
+                  >
+                    <Send size={18} /> Send
+                  </button>
+                </form>
+              </div>
             </motion.div>
           </div>
         )}

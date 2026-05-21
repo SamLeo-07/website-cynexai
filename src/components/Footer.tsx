@@ -224,8 +224,12 @@ const Footer = () => {
         {/* Bottom Footer (Social icons removed from here) */}
         <div className="py-6 border-t border-secondary/10">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-gray-300 text-sm text-center md:text-left">
-              © 2025 CynexAI. All rights reserved. | Privacy Policy | Terms of Service
+            <div className="text-gray-300 text-sm text-center md:text-left flex flex-col sm:flex-row items-center gap-2 sm:gap-0 justify-center md:justify-start">
+              <span>© 2025 CynexAI. All rights reserved.</span>
+              <span className="hidden sm:inline mx-2">|</span>
+              <Link to="/privacy" className="hover:text-[#41c8df] hover:underline transition-colors duration-200">Privacy Policy</Link>
+              <span className="mx-2">|</span>
+              <Link to="/terms" className="hover:text-[#41c8df] hover:underline transition-colors duration-200">Terms of Service</Link>
             </div>
             {/* Social media icons are no longer rendered here */}
           </div>

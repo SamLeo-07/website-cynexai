@@ -78,6 +78,17 @@ export interface Course {
   isVisible: boolean;
 }
 
+export interface Review {
+  id: string;
+  name: string;
+  role: string;
+  course: string;
+  rating: number;
+  text: string;
+  image: string;
+  isVisible: boolean;
+  created_at?: string;
+}
 
 
 // --- USER OPERATIONS ---
@@ -183,6 +194,20 @@ export const getAllEnrollments = async (): Promise<Enrollment[]> => {
   return [];
 };
 
+export const deleteEnrollment = async (id: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "DELETE FROM enrollments WHERE id = ?",
+        args: [id]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to delete enrollment", e);
+      throw e;
+    }
+  }
+};
+
 export const createEnrollment = async (enrollment: Enrollment) => {
   if (isTursoConfigured && client) {
     try {
@@ -281,16 +306,20 @@ export interface Payment {
   amount_paid: number;
   due_date: string;
   status: 'pending' | 'paid';
+  isVisible?: boolean;
 }
 
 export const getPaymentsByStudent = async (studentId: string): Promise<Payment[]> => {
   if (isTursoConfigured && client) {
     try {
       const result = await client.execute({
-        sql: "SELECT * FROM payments WHERE student_id = ?",
+        sql: "SELECT * FROM payments WHERE student_id = ? AND (isVisible = 1 OR isVisible IS NULL)",
         args: [studentId]
       });
-      return result.rows as unknown as Payment[];
+      return result.rows.map(row => ({
+        ...row,
+        isVisible: (row as any).isVisible === undefined ? true : (row as any).isVisible === 1
+      })) as unknown as Payment[];
     } catch (e) {
       console.error("Deepmind: Failed to fetch payments", e);
     }
@@ -302,7 +331,10 @@ export const getAllPayments = async (): Promise<Payment[]> => {
   if (isTursoConfigured && client) {
     try {
       const result = await client.execute("SELECT * FROM payments");
-      return result.rows as unknown as Payment[];
+      return result.rows.map(row => ({
+        ...row,
+        isVisible: (row as any).isVisible === 1 || (row as any).isVisible === undefined || (row as any).isVisible === null
+      })) as unknown as Payment[];
     } catch (e) {
       console.error("Deepmind: Failed to fetch all payments", e);
     }
@@ -314,15 +346,66 @@ export const createPayment = async (payment: Payment) => {
   if (isTursoConfigured && client) {
     try {
       await client.execute({
-        sql: `INSERT OR REPLACE INTO payments (id, student_id, total_amount, amount_paid, due_date, status)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [payment.id, payment.student_id, payment.total_amount, payment.amount_paid, payment.due_date, payment.status]
+        sql: `INSERT OR REPLACE INTO payments (id, student_id, total_amount, amount_paid, due_date, status, isVisible)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          payment.id,
+          payment.student_id,
+          payment.total_amount,
+          payment.amount_paid,
+          payment.due_date,
+          payment.status,
+          payment.isVisible !== false ? 1 : 0
+        ]
       });
     } catch (e) {
       console.error("Deepmind: Failed to create payment", e);
       throw e;
     }
   }
+};
+
+export const updatePayment = async (payment: Partial<Payment> & { id: string }) => {
+  if (isTursoConfigured && client) {
+    try {
+      const sets: string[] = [];
+      const args: (string | number | boolean | null)[] = [];
+
+      Object.entries(payment).forEach(([key, value]) => {
+        if (key !== 'id') {
+          sets.push(`${key} = ?`);
+          args.push(key === 'isVisible' ? (value ? 1 : 0) : value as string | number | null);
+        }
+      });
+
+      args.push(payment.id);
+      await client.execute({
+        sql: `UPDATE payments SET ${sets.join(', ')} WHERE id = ?`,
+        args
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to update payment in Turso:", e);
+      throw e;
+    }
+  }
+};
+
+export const deletePayment = async (id: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "DELETE FROM payments WHERE id = ?",
+        args: [id]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to delete payment in Turso:", e);
+      throw e;
+    }
+  }
+};
+
+export const togglePaymentVisibility = async (id: string, isVisible: boolean) => {
+  return updatePayment({ id, isVisible });
 };
 
 export interface SupportTicket {
@@ -372,6 +455,44 @@ export const updateSupportStatus = async (id: string, status: 'open' | 'resolved
       });
     } catch (e) {
       console.error("Deepmind: Failed to update ticket status", e);
+      throw e;
+    }
+  }
+};
+
+export interface SupportReply {
+  id: string;
+  ticket_id: string;
+  sender_id: string;
+  sender_name: string;
+  sender_role: 'student' | 'admin';
+  message: string;
+  created_at: string;
+}
+
+export const getSupportReplies = async (ticketId: string): Promise<SupportReply[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const sql = "SELECT * FROM support_replies WHERE ticket_id = ? ORDER BY created_at ASC";
+      const result = await client.execute({ sql, args: [ticketId] });
+      return result.rows as unknown as SupportReply[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch support replies", e);
+    }
+  }
+  return [];
+};
+
+export const createSupportReply = async (reply: Omit<SupportReply, 'created_at'>) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT INTO support_replies (id, ticket_id, sender_id, sender_name, sender_role, message, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [reply.id, reply.ticket_id, reply.sender_id, reply.sender_name, reply.sender_role, reply.message, new Date().toISOString()]
+      });
+    } catch (e) {
+      console.error("Deepmind: Failed to create support reply", e);
       throw e;
     }
   }
@@ -520,6 +641,17 @@ export interface Discussion {
   student_name: string;
   message: string;
   created_at: string;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  target_audience: 'all' | 'course';
+  course_id?: string;
+  created_by: string;
+  created_at: string;
+  isActive: boolean;
 }
 
 const STORAGE_KEY = 'cynexai_blog_posts';
@@ -797,6 +929,288 @@ export const syncSamplePosts = async () => {
   return { success: 0, failed: 0 };
 };
 
+// --- ANNOUNCEMENT OPERATIONS ---
+
+export const getAnnouncements = async (): Promise<Announcement[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute("SELECT * FROM announcements ORDER BY created_at DESC");
+      return result.rows.map(row => ({
+        ...row,
+        isActive: (row as any).isActive === 1
+      })) as unknown as Announcement[];
+    } catch (e) {
+      console.error("Failed to fetch announcements", e);
+    }
+  }
+  return [];
+};
+
+export const createAnnouncement = async (announcement: Omit<Announcement, 'created_at'>) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT INTO announcements (id, title, message, target_audience, course_id, created_by, created_at, isActive)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [announcement.id, announcement.title, announcement.message, announcement.target_audience,
+               announcement.course_id || null, announcement.created_by, new Date().toISOString(), announcement.isActive ? 1 : 0]
+      });
+    } catch (e) {
+      console.error("Failed to create announcement", e);
+      throw e;
+    }
+  }
+};
+
+export const deleteAnnouncement = async (id: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({ sql: "DELETE FROM announcements WHERE id = ?", args: [id] });
+    } catch (e) {
+      console.error("Failed to delete announcement", e);
+    }
+  }
+};
+
+export const toggleAnnouncementStatus = async (id: string, isActive: boolean) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({ sql: "UPDATE announcements SET isActive = ? WHERE id = ?", args: [isActive ? 1 : 0, id] });
+    } catch (e) {
+      console.error("Failed to toggle announcement", e);
+    }
+  }
+};
+
+// --- ADMIN LESSON CRUD ---
+
+export const createLesson = async (lesson: Lesson) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT INTO lessons (id, course_id, module_name, lesson_title, video_url, order_index)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [lesson.id, lesson.course_id, lesson.module_name, lesson.lesson_title, lesson.video_url, lesson.order_index]
+      });
+    } catch (e) {
+      console.error("Failed to create lesson", e);
+      throw e;
+    }
+  }
+};
+
+export const updateLesson = async (lesson: Lesson) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `UPDATE lessons SET module_name=?, lesson_title=?, video_url=?, order_index=? WHERE id=?`,
+        args: [lesson.module_name, lesson.lesson_title, lesson.video_url, lesson.order_index, lesson.id]
+      });
+    } catch (e) {
+      console.error("Failed to update lesson", e);
+      throw e;
+    }
+  }
+};
+
+export const deleteLesson = async (id: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({ sql: "DELETE FROM lessons WHERE id = ?", args: [id] });
+    } catch (e) {
+      console.error("Failed to delete lesson", e);
+    }
+  }
+};
+
+export const getAllLessons = async (): Promise<Lesson[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute("SELECT * FROM lessons ORDER BY course_id, order_index ASC");
+      return result.rows as unknown as Lesson[];
+    } catch (e) {
+      console.error("Failed to fetch all lessons", e);
+    }
+  }
+  return [];
+};
+
+// --- ADMIN BADGE CRUD ---
+
+export const getAllBadges = async (): Promise<Badge[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute("SELECT * FROM badges ORDER BY unlocked_at DESC");
+      return result.rows as unknown as Badge[];
+    } catch (e) {
+      console.error("Failed to fetch all badges", e);
+    }
+  }
+  return [];
+};
+
+export const createBadge = async (badge: Badge) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT INTO badges (id, student_id, title, icon, color, unlocked_at)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [badge.id, badge.student_id, badge.title, badge.icon, badge.color, badge.unlocked_at || new Date().toISOString()]
+      });
+    } catch (e) {
+      console.error("Failed to create badge", e);
+      throw e;
+    }
+  }
+};
+
+export const deleteBadge = async (id: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({ sql: "DELETE FROM badges WHERE id = ?", args: [id] });
+    } catch (e) {
+      console.error("Failed to delete badge", e);
+    }
+  }
+};
+
+// --- ADMIN JOB CRUD ---
+
+export const createJobListing = async (job: JobListing) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `INSERT INTO job_listings (id, title, company, location, salary, description, type, category, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [job.id, job.title, job.company, job.location, job.salary, job.description, job.type, job.category, job.created_at || new Date().toISOString()]
+      });
+    } catch (e) {
+      console.error("Failed to create job listing", e);
+      throw e;
+    }
+  }
+};
+
+export const updateJobListing = async (job: JobListing) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: `UPDATE job_listings SET title=?, company=?, location=?, salary=?, description=?, type=?, category=? WHERE id=?`,
+        args: [job.title, job.company, job.location, job.salary, job.description, job.type, job.category, job.id]
+      });
+    } catch (e) {
+      console.error("Failed to update job listing", e);
+      throw e;
+    }
+  }
+};
+
+export const deleteJobListing = async (id: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({ sql: "DELETE FROM job_listings WHERE id = ?", args: [id] });
+    } catch (e) {
+      console.error("Failed to delete job listing", e);
+    }
+  }
+};
+
+// --- ADMIN ANALYTICS QUERIES ---
+
+export interface AdminStats {
+  totalStudents: number;
+  totalCourses: number;
+  totalEnrollments: number;
+  activeEnrollments: number;
+  completedEnrollments: number;
+  totalRevenue: number;
+  totalPayments: number;
+  openTickets: number;
+  totalJobs: number;
+  totalWebinars: number;
+}
+
+export const getAdminStats = async (): Promise<AdminStats> => {
+  const defaults: AdminStats = {
+    totalStudents: 0, totalCourses: 0, totalEnrollments: 0,
+    activeEnrollments: 0, completedEnrollments: 0,
+    totalRevenue: 0, totalPayments: 0, openTickets: 0,
+    totalJobs: 0, totalWebinars: 0
+  };
+  if (isTursoConfigured && client) {
+    try {
+      const [students, courses, enrollments, activeEnr, completedEnr, revenue, payments, tickets, jobs, webinars] = await Promise.all([
+        client.execute("SELECT COUNT(*) as c FROM users WHERE role='student'"),
+        client.execute("SELECT COUNT(*) as c FROM courses"),
+        client.execute("SELECT COUNT(*) as c FROM enrollments"),
+        client.execute("SELECT COUNT(*) as c FROM enrollments WHERE status='active'"),
+        client.execute("SELECT COUNT(*) as c FROM enrollments WHERE status='completed'"),
+        client.execute("SELECT COALESCE(SUM(amount_paid), 0) as total FROM payments"),
+        client.execute("SELECT COUNT(*) as c FROM payments"),
+        client.execute("SELECT COUNT(*) as c FROM support_tickets WHERE status='open'"),
+        client.execute("SELECT COUNT(*) as c FROM job_listings"),
+        client.execute("SELECT COUNT(*) as c FROM webinars")
+      ]);
+      return {
+        totalStudents: Number(students.rows[0].c),
+        totalCourses: Number(courses.rows[0].c),
+        totalEnrollments: Number(enrollments.rows[0].c),
+        activeEnrollments: Number(activeEnr.rows[0].c),
+        completedEnrollments: Number(completedEnr.rows[0].c),
+        totalRevenue: Number(revenue.rows[0].total),
+        totalPayments: Number(payments.rows[0].c),
+        openTickets: Number(tickets.rows[0].c),
+        totalJobs: Number(jobs.rows[0].c),
+        totalWebinars: Number(webinars.rows[0].c)
+      };
+    } catch (e) {
+      console.error("Failed to get admin stats", e);
+    }
+  }
+  return defaults;
+};
+
+export const getEnrollmentStatsByCourse = async (): Promise<{ course_id: string; course_title: string; count: number }[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute(`
+        SELECT e.course_id, c.title as course_title, COUNT(*) as count
+        FROM enrollments e
+        LEFT JOIN courses c ON e.course_id = c.id
+        GROUP BY e.course_id
+        ORDER BY count DESC
+      `);
+      return result.rows.map(r => ({
+        course_id: r.course_id as string,
+        course_title: (r.course_title as string) || r.course_id as string,
+        count: Number(r.count)
+      }));
+    } catch (e) {
+      console.error("Failed to get enrollment stats", e);
+    }
+  }
+  return [];
+};
+
+export const getRevenueOverTime = async (): Promise<{ month: string; revenue: number }[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute(`
+        SELECT strftime('%Y-%m', due_date) as month, SUM(amount_paid) as revenue
+        FROM payments WHERE status='paid'
+        GROUP BY month ORDER BY month ASC
+      `);
+      return result.rows.map(r => ({
+        month: r.month as string,
+        revenue: Number(r.revenue)
+      }));
+    } catch (e) {
+      console.error("Failed to get revenue data", e);
+    }
+  }
+  return [];
+};
+
 export const initTursoDB = async () => {
   if (isInitialized) return true;
   if (isInitializing) return true; // Already in progress
@@ -973,7 +1387,8 @@ export const initTursoDB = async () => {
           total_amount REAL,
           amount_paid REAL DEFAULT 0,
           due_date TEXT,
-          status TEXT DEFAULT 'pending'
+          status TEXT DEFAULT 'pending',
+          isVisible INTEGER DEFAULT 1
         )
       `);
 
@@ -984,6 +1399,18 @@ export const initTursoDB = async () => {
           category TEXT,
           description TEXT,
           status TEXT DEFAULT 'open',
+          created_at TEXT
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS support_replies (
+          id TEXT PRIMARY KEY,
+          ticket_id TEXT NOT NULL,
+          sender_id TEXT NOT NULL,
+          sender_name TEXT NOT NULL,
+          sender_role TEXT NOT NULL,
+          message TEXT NOT NULL,
           created_at TEXT
         )
       `);
@@ -1000,6 +1427,15 @@ export const initTursoDB = async () => {
       `);
 
       await client.execute(`
+        CREATE TABLE IF NOT EXISTS onboarding_steps (
+          student_id TEXT,
+          step_id TEXT,
+          is_done INTEGER DEFAULT 0,
+          PRIMARY KEY (student_id, step_id)
+        )
+      `);
+
+      await client.execute(`
         CREATE TABLE IF NOT EXISTS job_listings (
           id TEXT PRIMARY KEY,
           title TEXT,
@@ -1010,6 +1446,19 @@ export const initTursoDB = async () => {
           type TEXT,
           category TEXT,
           created_at TEXT
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS announcements (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          target_audience TEXT DEFAULT 'all',
+          course_id TEXT,
+          created_by TEXT,
+          created_at TEXT,
+          isActive INTEGER DEFAULT 1
         )
       `);
 
@@ -1036,6 +1485,20 @@ export const initTursoDB = async () => {
         )
       `);
 
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS testimonials (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          role TEXT,
+          course TEXT,
+          rating INTEGER DEFAULT 5,
+          text TEXT NOT NULL,
+          image TEXT,
+          isVisible INTEGER DEFAULT 1,
+          created_at TEXT
+        )
+      `);
+
       // Migrate: add new columns to courses table if they don't exist yet
       const colChecks = ['subtitle', 'placement', 'modules', 'outcomes', 'prerequisites', 'career'];
       for (const col of colChecks) {
@@ -1044,6 +1507,13 @@ export const initTursoDB = async () => {
         } catch {
           // Column already exists — ignore
         }
+      }
+
+      // Migrate: add isVisible column to payments table if it doesn't exist yet
+      try {
+        await client.execute(`ALTER TABLE payments ADD COLUMN isVisible INTEGER DEFAULT 1`);
+      } catch {
+        // Column already exists — ignore
       }
 
       // Sync user created content from LocalStorage
@@ -1057,6 +1527,9 @@ export const initTursoDB = async () => {
 
       // Sync sample LMS data (jobs, badges, etc.)
       await syncSampleLMSData();
+
+      // Sync sample testimonials
+      await syncSampleTestimonials();
 
       console.log("Turso Cloud Database Connected and Initialized");
       isInitialized = true;
@@ -1593,7 +2066,11 @@ export const syncSampleCourses = async () => {
       // Check if courses table is empty
       const countRes = await client.execute("SELECT COUNT(*) as count FROM courses");
       const count = Number(countRes.rows[0].count);
-      if (count > 0) return;
+      if (count > 0) {
+        // Force-update standard courses to visible
+        await client.execute("UPDATE courses SET isVisible = 1 WHERE id IN ('data-science-machine-learning', 'artificial-intelligence-generative-ai', 'full-stack-java-development', 'devops-cloud-technologies')");
+        return;
+      }
 
       console.log("Deepmind: Syncing sample courses with full detail data...");
       const sampleCourses = [
@@ -1884,10 +2361,12 @@ const syncSampleLMSData = async () => {
         }
       }
 
-      // Seed default badges for the first student if any
-      const studentsCheck = await client.execute("SELECT id FROM students LIMIT 1");
-      if (studentsCheck.rows.length > 0) {
-        const studentId = studentsCheck.rows[0].id as string;
+      // Seed default badges and payments for student users
+      const studentsResult = await client.execute("SELECT id FROM users WHERE role = 'student'");
+      for (const s of studentsResult.rows) {
+        const studentId = s.id as string;
+        
+        // Seed badges
         const badgesCheck = await client.execute({
           sql: "SELECT count(*) as count FROM badges WHERE student_id = ?",
           args: [studentId]
@@ -1903,6 +2382,78 @@ const syncSampleLMSData = async () => {
               args: [crypto.randomUUID(), studentId, b.title, b.icon, b.color, new Date().toISOString()]
             });
           }
+        }
+
+        // Seed payments / transaction history
+        const paymentsCheck = await client.execute({
+          sql: "SELECT count(*) as count FROM payments WHERE student_id = ?",
+          args: [studentId]
+        });
+        if (Number(paymentsCheck.rows[0].count) === 0) {
+          const samplePayments = [
+            {
+              id: 'pay_ref_' + crypto.randomUUID().substring(0, 8),
+              total: 49999,
+              paid: 15000,
+              dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+              status: 'pending'
+            },
+            {
+              id: 'pay_ref_' + crypto.randomUUID().substring(0, 8),
+              total: 49999,
+              paid: 34999,
+              dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+              status: 'paid'
+            }
+          ];
+          for (const p of samplePayments) {
+            await client.execute({
+              sql: `INSERT INTO payments (id, student_id, total_amount, amount_paid, due_date, status)
+                    VALUES (?, ?, ?, ?, ?, ?)`,
+              args: [p.id, studentId, p.total, p.paid, p.dueDate, p.status]
+            });
+          }
+        }
+      }
+
+      // Seed sample lessons for courses
+      const lessonsCountRes = await client.execute("SELECT COUNT(*) as count FROM lessons");
+      const lessonsCount = Number(lessonsCountRes.rows[0].count);
+      if (lessonsCount < 16) {
+        console.log("Deepmind: Seeding sample course lessons with active URLs...");
+        await client.execute("DELETE FROM lessons");
+        const sampleLessons = [
+          // Data Science & Machine Learning
+          { id: 'ds_l1', course_id: 'data-science-machine-learning', module_name: 'Python Programming Fundamentals', lesson_title: 'Introduction to Data Science & Jupyter Notebooks', video_url: 'https://www.youtube.com/embed/ua-CiDNNj30', order_index: 1 },
+          { id: 'ds_l2', course_id: 'data-science-machine-learning', module_name: 'Data Manipulation with Pandas & NumPy', lesson_title: 'Pandas & NumPy Deep Dive for Beginners', video_url: 'https://www.youtube.com/embed/rfscVS0vtbw', order_index: 2 },
+          { id: 'ds_l3', course_id: 'data-science-machine-learning', module_name: 'Supervised Machine Learning Algorithms', lesson_title: 'Introduction to Supervised Machine Learning', video_url: 'https://www.youtube.com/embed/GwIo3gToVQM', order_index: 3 },
+          { id: 'ds_l4', course_id: 'data-science-machine-learning', module_name: 'Deep Learning with TensorFlow & Keras', lesson_title: 'Deep Learning Foundations with TensorFlow', video_url: 'https://www.youtube.com/embed/aircAruvnKk', order_index: 4 },
+
+          // Artificial Intelligence & Generative AI
+          { id: 'ai_l1', course_id: 'artificial-intelligence-generative-ai', module_name: 'Introduction to AI & Deep Learning', lesson_title: 'Introduction to Artificial Intelligence & Deep Learning', video_url: 'https://www.youtube.com/embed/Jgvyz2fK-a4', order_index: 1 },
+          { id: 'ai_l2', course_id: 'artificial-intelligence-generative-ai', module_name: 'Generative Adversarial Networks (GANs)', lesson_title: 'Generative Adversarial Networks (GANs) Explained', video_url: 'https://www.youtube.com/embed/8L11aMN5KY8', order_index: 2 },
+          { id: 'ai_l3', course_id: 'artificial-intelligence-generative-ai', module_name: 'Large Language Models (LLMs) & Transformers', lesson_title: 'Introduction to Transformers & Hugging Face', video_url: 'https://www.youtube.com/embed/XfpMkf4rD6E', order_index: 3 },
+          { id: 'ai_l4', course_id: 'artificial-intelligence-generative-ai', module_name: 'Prompt Engineering & Fine-tuning LLMs', lesson_title: 'Prompt Engineering & LLM Orchestration', video_url: 'https://www.youtube.com/embed/mJCckqQ96gc', order_index: 4 },
+
+          // Full Stack Java Development
+          { id: 'java_l1', course_id: 'full-stack-java-development', module_name: 'Java Core & OOP', lesson_title: 'Java Programming Basics & OOP Foundations', video_url: 'https://www.youtube.com/embed/grEKMHGYync', order_index: 1 },
+          { id: 'java_l2', course_id: 'full-stack-java-development', module_name: 'SQL & Database Management', lesson_title: 'Introduction to Relational Databases & SQL', video_url: 'https://www.youtube.com/embed/HXV3zeQKqGY', order_index: 2 },
+          { id: 'java_l3', course_id: 'full-stack-java-development', module_name: 'Spring Boot & Microservices', lesson_title: 'Building REST APIs with Spring Boot', video_url: 'https://www.youtube.com/embed/vtPkDP3DF5A', order_index: 3 },
+          { id: 'java_l4', course_id: 'full-stack-java-development', module_name: 'Frontend Development', lesson_title: 'Connecting React Frontend to Spring Boot Backend', video_url: 'https://www.youtube.com/embed/2u3IcrgVnEg', order_index: 4 },
+
+          // DevOps & Cloud Technologies
+          { id: 'devops_l1', course_id: 'devops-cloud-technologies', module_name: 'DevOps & Cloud Technologies', lesson_title: 'Introduction to DevOps Principles & AWS Cloud', video_url: 'https://www.youtube.com/embed/j5Zsa_eOXeY', order_index: 1 },
+          { id: 'devops_l2', course_id: 'devops-cloud-technologies', module_name: 'CI/CD Pipelines', lesson_title: 'Continuous Integration & Deployment (CI/CD) Pipelines', video_url: 'https://www.youtube.com/embed/scEDHsr3APg', order_index: 2 },
+          { id: 'devops_l3', course_id: 'devops-cloud-technologies', module_name: 'Docker & Containerization', lesson_title: 'Docker Containers for Software Engineers', video_url: 'https://www.youtube.com/embed/3c-iFnDcCD0', order_index: 3 },
+          { id: 'devops_l4', course_id: 'devops-cloud-technologies', module_name: 'Kubernetes', lesson_title: 'Kubernetes Orchestration from Scratch', video_url: 'https://www.youtube.com/embed/X48VuDVv0do', order_index: 4 }
+        ];
+
+        for (const lesson of sampleLessons) {
+          await client.execute({
+            sql: `INSERT OR REPLACE INTO lessons (id, course_id, module_name, lesson_title, video_url, order_index)
+                  VALUES (?, ?, ?, ?, ?, ?)`,
+            args: [lesson.id, lesson.course_id, lesson.module_name, lesson.lesson_title, lesson.video_url, lesson.order_index]
+          });
         }
       }
     } catch (e) {
@@ -1997,5 +2548,262 @@ export const createDiscussion = async (discussion: Discussion) => {
       console.error("Failed to create discussion", e);
       throw e;
     }
+  }
+};
+
+const syncSampleTestimonials = async () => {
+  if (isTursoConfigured && client) {
+    try {
+      const check = await client.execute("SELECT count(*) as count FROM testimonials");
+      if (Number(check.rows[0].count) === 0) {
+        const sampleReviews = [
+          {
+            id: 'rev_1',
+            name: 'Anil Kumar',
+            role: 'Java Developer at BeamX Techlab',
+            course: 'Full Stack Java',
+            rating: 5,
+            text: 'CynexAI gave me the skills and confidence I needed to land my first job in tech. The trainers are industry experts and the placement support is truly effective.',
+            image: 'gallery_images/WhatsApp%20Image%202025-07-28%20at%2016.47.23_9abc2e80.jpg?version%3D1755168647258',
+            isVisible: 1,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'rev_2',
+            name: 'Suresh Kumar',
+            role: 'Python Developer at Wexl Edu Pvt Ltd',
+            course: 'Full Stack Python',
+            rating: 5,
+            text: 'From day one, the learning experience was smooth, practical, and job-focused. I highly recommend CynexAI to anyone serious about starting a tech career.',
+            image: 'gallery_images/WhatsApp Image 2025-07-28 at 16.48.15_34734bc2.jpg',
+            isVisible: 1,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'rev_3',
+            name: 'Y. Bhavana',
+            role: 'Web Developer at Zuper Pvt Ltd',
+            course: 'Web development',
+            rating: 5,
+            text: 'The Web Development course at CynexAI helped me build real websites from scratch. HTML, CSS, JavaScript, and React were taught in a very easy-to-understand way.',
+            image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.01.27_a8763108.jpg',
+            isVisible: 1,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'rev_4',
+            name: 'K. Pullaiah',
+            role: 'Software Tester at Persistent Systems',
+            course: 'Testing (Manual + Automation)',
+            rating: 5,
+            text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly.",
+            image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.17.45_290e8232.jpg',
+            isVisible: 1,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'rev_5',
+            name: 'Chandrashekar',
+            role: 'Software Tester at Paramount Software',
+            course: 'Testing (Auto + Manual)',
+            rating: 5,
+            text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly",
+            image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.53.04_4aea19f7.jpg',
+            isVisible: 1,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'rev_6',
+            name: 'Sai Nath',
+            role: 'Web Developer at Cognizent',
+            course: 'Full Stack',
+            rating: 5,
+            text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly",
+            image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.50.41_ed43fe99.jpg',
+            isVisible: 1,
+            created_at: new Date().toISOString()
+          }
+        ];
+
+        for (const rev of sampleReviews) {
+          await client.execute({
+            sql: `INSERT INTO testimonials (id, name, role, course, rating, text, image, isVisible, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [rev.id, rev.name, rev.role, rev.course, rev.rating, rev.text, rev.image, rev.isVisible, rev.created_at]
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to seed testimonials", e);
+    }
+  }
+};
+
+export const getReviews = async (includeHidden = false): Promise<Review[]> => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await initTursoDB();
+      let query = "SELECT * FROM testimonials";
+      if (!includeHidden) {
+        query += " WHERE isVisible = 1";
+      }
+      query += " ORDER BY created_at DESC";
+      const result = await client.execute(query);
+      return result.rows.map(row => ({
+        id: row.id as string,
+        name: row.name as string,
+        role: row.role as string,
+        course: row.course as string,
+        rating: Number(row.rating),
+        text: row.text as string,
+        image: row.image as string,
+        isVisible: row.isVisible === 1,
+        created_at: row.created_at as string
+      }));
+    } catch (e) {
+      console.error("Failed to fetch reviews from Turso", e);
+    }
+  }
+
+  // Local storage fallback for admin additions when offline/local fallback is active
+  try {
+    const localReviewsStr = localStorage.getItem('cynexai_local_testimonials');
+    if (localReviewsStr) {
+      const localReviews = JSON.parse(localReviewsStr) as Review[];
+      return includeHidden ? localReviews : localReviews.filter(r => r.isVisible);
+    }
+  } catch (e) {
+    console.error("Failed to parse local reviews", e);
+  }
+
+  return [];
+};
+
+export const createReview = async (review: Review) => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await client.execute({
+        sql: `INSERT INTO testimonials (id, name, role, course, rating, text, image, isVisible, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          review.id,
+          review.name,
+          review.role,
+          review.course,
+          review.rating,
+          review.text,
+          review.image || '',
+          review.isVisible ? 1 : 0,
+          review.created_at || new Date().toISOString()
+        ]
+      });
+      return;
+    } catch (e) {
+      console.error("Failed to create review in Turso", e);
+      throw e;
+    }
+  }
+
+  // Fallback local storage CRUD
+  try {
+    const localReviewsStr = localStorage.getItem('cynexai_local_testimonials') || '[]';
+    const localReviews = JSON.parse(localReviewsStr) as Review[];
+    localReviews.unshift({
+      ...review,
+      created_at: review.created_at || new Date().toISOString()
+    });
+    localStorage.setItem('cynexai_local_testimonials', JSON.stringify(localReviews));
+  } catch (e) {
+    console.error("Failed to create local review", e);
+    throw e;
+  }
+};
+
+export const updateReview = async (review: Review) => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await client.execute({
+        sql: `UPDATE testimonials
+              SET name = ?, role = ?, course = ?, rating = ?, text = ?, image = ?, isVisible = ?
+              WHERE id = ?`,
+        args: [
+          review.name,
+          review.role,
+          review.course,
+          review.rating,
+          review.text,
+          review.image || '',
+          review.isVisible ? 1 : 0,
+          review.id
+        ]
+      });
+      return;
+    } catch (e) {
+      console.error("Failed to update review in Turso", e);
+      throw e;
+    }
+  }
+
+  // Fallback local storage CRUD
+  try {
+    const localReviewsStr = localStorage.getItem('cynexai_local_testimonials') || '[]';
+    let localReviews = JSON.parse(localReviewsStr) as Review[];
+    localReviews = localReviews.map(r => r.id === review.id ? { ...r, ...review } : r);
+    localStorage.setItem('cynexai_local_testimonials', JSON.stringify(localReviews));
+  } catch (e) {
+    console.error("Failed to update local review", e);
+    throw e;
+  }
+};
+
+export const deleteReview = async (id: string) => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await client.execute({
+        sql: "DELETE FROM testimonials WHERE id = ?",
+        args: [id]
+      });
+      return;
+    } catch (e) {
+      console.error("Failed to delete review in Turso", e);
+      throw e;
+    }
+  }
+
+  // Fallback local storage CRUD
+  try {
+    const localReviewsStr = localStorage.getItem('cynexai_local_testimonials') || '[]';
+    let localReviews = JSON.parse(localReviewsStr) as Review[];
+    localReviews = localReviews.filter(r => r.id !== id);
+    localStorage.setItem('cynexai_local_testimonials', JSON.stringify(localReviews));
+  } catch (e) {
+    console.error("Failed to delete local review", e);
+    throw e;
+  }
+};
+
+export const toggleReviewVisibility = async (id: string, isVisible: boolean) => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      await client.execute({
+        sql: "UPDATE testimonials SET isVisible = ? WHERE id = ?",
+        args: [isVisible ? 1 : 0, id]
+      });
+      return;
+    } catch (e) {
+      console.error("Failed to toggle review visibility in Turso", e);
+      throw e;
+    }
+  }
+
+  // Fallback local storage CRUD
+  try {
+    const localReviewsStr = localStorage.getItem('cynexai_local_testimonials') || '[]';
+    let localReviews = JSON.parse(localReviewsStr) as Review[];
+    localReviews = localReviews.map(r => r.id === id ? { ...r, isVisible } : r);
+    localStorage.setItem('cynexai_local_testimonials', JSON.stringify(localReviews));
+  } catch (e) {
+    console.error("Failed to toggle local review visibility", e);
+    throw e;
   }
 };

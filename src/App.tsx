@@ -5,6 +5,7 @@ import ScrollToTop from './utils/ScrollToTop';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Courses from './components/Courses';
+import CoursesLanding from './components/CoursesLanding';
 import Skills from './components/Skills';
 import Reviews from './components/Reviews';
 import Contact from './components/Contact';
@@ -21,6 +22,8 @@ import ThreeBackground from './components/ThreeBackground';
 import AboutUs from './components/AboutUs';
 import StudentLogin from './components/StudentLogin';
 import StudentPortal from './components/StudentPortal';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
 
 
 const HomePage = () => (
@@ -42,6 +45,7 @@ function App() {
         <Header />
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/courses" element={<CoursesLanding />} />
           <Route path="/course/:courseId" element={<CourseDetail />} />
           <Route path="/apply/:courseId" element={<ApplicationForm />} />
           <Route path="/webinar" element={<WebinarPortal />} />
@@ -53,6 +57,8 @@ function App() {
           <Route path="/about" element={<AboutUs />} />
           <Route path="/login" element={<StudentLogin />} />
           <Route path="/portal" element={<StudentPortal />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
         </Routes>
         <Footer />
       </div>
