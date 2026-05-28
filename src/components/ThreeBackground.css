@@ -1,0 +1,7 @@
+.three-background {
+    background: radial-gradient(ellipse at center, #eef2f3 0%, #dcdcdc 70%, #c9c9c9 100%);
+}
+
+.three-background.dark {
+    background: radial-gradient(ellipse at center, #0a0a0f 0%, #020205 70%, #000000 100%);
+}
