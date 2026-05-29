@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, Calendar, Clock, Plus, Trash2, Eye, 
-  CheckCircle, AlertTriangle, KeyRound, QrCode, X, UserPlus, ShieldAlert 
+  CheckCircle, AlertTriangle, KeyRound, QrCode, X, UserPlus, ShieldAlert, Download 
 } from 'lucide-react';
 import { 
   createAttendanceSession, 
@@ -204,6 +204,61 @@ export const AdminAttendance: React.FC<AdminAttendanceProps> = ({
     return c ? c.title : 'General';
   };
 
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadSessions = () => {
+    const data = sessions.map(s => ({
+      ID: s.id,
+      Topic: s.topic,
+      Course: getCourseTitle(s.course_id),
+      Date: s.session_date,
+      Time: s.session_time || 'N/A',
+      Batch: s.batch_name || 'N/A',
+      PIN: s.pin_code,
+      StudentCount: s.studentCount
+    }));
+    exportToCSV(data, 'attendance_sessions_report.csv', ['ID', 'Topic', 'Course', 'Date', 'Time', 'Batch', 'PIN Code', 'Checked-in Students']);
+  };
+
+  const handleDownloadStats = () => {
+    const data = attendanceStats.map(s => ({
+      StudentID: s.student_id,
+      StudentName: s.student_name,
+      Course: getCourseTitle(s.course_id),
+      TotalSessions: s.total,
+      AttendedSessions: s.attended,
+      Percentage: s.percentage + '%'
+    }));
+    exportToCSV(data, 'student_attendance_stats.csv', ['Student ID', 'Student Name', 'Course', 'Total Sessions', 'Attended Sessions', 'Attendance Percentage']);
+  };
+
   // Dashboard Stats Calculations
   const todayStr = new Date().toISOString().split('T')[0];
   const sessionsToday = sessions.filter(s => s.session_date === todayStr).length;
@@ -317,8 +372,17 @@ export const AdminAttendance: React.FC<AdminAttendanceProps> = ({
         
         {/* Sessions Table (7 cols) */}
         <div className="xl:col-span-7 bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-700 flex justify-between items-center">
             <h3 className="font-bold text-lg text-white">Active & Past Sessions</h3>
+            {sessions.length > 0 && (
+              <button
+                onClick={handleDownloadSessions}
+                className="inline-flex items-center text-xs font-bold text-[#41c8df] hover:underline"
+                title="Download all attendance sessions as CSV"
+              >
+                <Download className="w-3.5 h-3.5 mr-1" /> Download
+              </button>
+            )}
           </div>
 
           {loading ? (
@@ -402,8 +466,17 @@ export const AdminAttendance: React.FC<AdminAttendanceProps> = ({
 
         {/* Student Stats Table (5 cols) */}
         <div className="xl:col-span-5 bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-700 flex justify-between items-center">
             <h3 className="font-bold text-lg text-white">Student Stats Ledger</h3>
+            {attendanceStats.length > 0 && (
+              <button
+                onClick={handleDownloadStats}
+                className="inline-flex items-center text-xs font-bold text-[#41c8df] hover:underline"
+                title="Download student attendance ledger as CSV"
+              >
+                <Download className="w-3.5 h-3.5 mr-1" /> Download
+              </button>
+            )}
           </div>
 
           {loading ? (

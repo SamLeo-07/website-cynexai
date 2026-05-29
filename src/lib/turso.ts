@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { createClient } from '@libsql/client';
 import { codingQuestionBank, mockTestBank, mockTestQuestionsBank } from './questionBank';
+import { advancedAiPosts } from '../data/aiPosts';
 
 // Turso Database Configuration
 const url = import.meta.env.VITE_TURSO_DATABASE_URL;
@@ -504,7 +505,8 @@ export const getPaymentsByStudent = async (studentId: string): Promise<Payment[]
       console.error("Deepmind: Failed to fetch payments", e);
     }
   }
-  return [];
+  const allPayments = await getAllPayments();
+  return allPayments.filter(p => p.student_id === studentId && p.isVisible !== false);
 };
 
 export const getAllPayments = async (): Promise<Payment[]> => {
@@ -519,7 +521,41 @@ export const getAllPayments = async (): Promise<Payment[]> => {
       console.error("Deepmind: Failed to fetch all payments", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_payments');
+    if (local) {
+      const parsed = JSON.parse(local) as Payment[];
+      return parsed.map(p => ({
+        ...p,
+        isVisible: p.isVisible !== false
+      }));
+    }
+    // Seed default payments
+    const samplePayments: Payment[] = [
+      {
+        id: 'pay_ref_demo_1',
+        student_id: 'demo-student-id',
+        total_amount: 49999,
+        amount_paid: 15000,
+        due_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+        status: 'pending',
+        isVisible: true
+      },
+      {
+        id: 'pay_ref_demo_2',
+        student_id: 'demo-student-id',
+        total_amount: 49999,
+        amount_paid: 34999,
+        due_date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+        status: 'paid',
+        isVisible: true
+      }
+    ];
+    localStorage.setItem('cynexai_local_payments', JSON.stringify(samplePayments));
+    return samplePayments;
+  } catch {
+    return [];
+  }
 };
 
 export const createPayment = async (payment: Payment) => {
@@ -538,10 +574,23 @@ export const createPayment = async (payment: Payment) => {
           payment.isVisible !== false ? 1 : 0
         ]
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to create payment", e);
       throw e;
     }
+  }
+  try {
+    const all = await getAllPayments();
+    const index = all.findIndex(p => p.id === payment.id);
+    if (index !== -1) {
+      all[index] = payment;
+    } else {
+      all.push(payment);
+    }
+    localStorage.setItem('cynexai_local_payments', JSON.stringify(all));
+  } catch (e) {
+    console.error("Deepmind: Failed to save payment to localStorage", e);
   }
 };
 
@@ -563,10 +612,21 @@ export const updatePayment = async (payment: Partial<Payment> & { id: string }) 
         sql: `UPDATE payments SET ${sets.join(', ')} WHERE id = ?`,
         args
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to update payment in Turso:", e);
       throw e;
     }
+  }
+  try {
+    const all = await getAllPayments();
+    const index = all.findIndex(p => p.id === payment.id);
+    if (index !== -1) {
+      all[index] = { ...all[index], ...payment };
+      localStorage.setItem('cynexai_local_payments', JSON.stringify(all));
+    }
+  } catch (e) {
+    console.error("Deepmind: Failed to update payment in localStorage", e);
   }
 };
 
@@ -577,10 +637,18 @@ export const deletePayment = async (id: string) => {
         sql: "DELETE FROM payments WHERE id = ?",
         args: [id]
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to delete payment in Turso:", e);
       throw e;
     }
+  }
+  try {
+    const all = await getAllPayments();
+    const filtered = all.filter(p => p.id !== id);
+    localStorage.setItem('cynexai_local_payments', JSON.stringify(filtered));
+  } catch (e) {
+    console.error("Deepmind: Failed to delete payment in localStorage", e);
   }
 };
 
@@ -608,21 +676,60 @@ export const getSupportTickets = async (studentId?: string): Promise<SupportTick
       console.error("Deepmind: Failed to fetch tickets", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_support_tickets');
+    if (local) {
+      const tickets = JSON.parse(local) as SupportTicket[];
+      const sorted = tickets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return studentId ? sorted.filter(t => t.student_id === studentId) : sorted;
+    }
+    // Seed default tickets
+    const sampleTickets: SupportTicket[] = [
+      {
+        id: 'ticket_demo_1',
+        student_id: 'demo-student-id',
+        category: 'Course Content',
+        description: 'Unable to access the deep learning module videos. They show a permission error.',
+        status: 'open',
+        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        id: 'ticket_demo_2',
+        student_id: 'demo-student-id',
+        category: 'Payments',
+        description: 'My UPI transaction went through but the portal status shows pending.',
+        status: 'resolved',
+        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    ];
+    localStorage.setItem('cynexai_local_support_tickets', JSON.stringify(sampleTickets));
+    return studentId ? sampleTickets.filter(t => t.student_id === studentId) : sampleTickets;
+  } catch {
+    return [];
+  }
 };
 
 export const createSupportTicket = async (ticket: Omit<SupportTicket, 'created_at'>) => {
+  const newTicket = { ...ticket, created_at: new Date().toISOString() };
   if (isTursoConfigured && client) {
     try {
       await client.execute({
         sql: `INSERT OR REPLACE INTO support_tickets (id, student_id, category, description, status, created_at)
               VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [ticket.id, ticket.student_id, ticket.category, ticket.description, ticket.status || 'open', new Date().toISOString()]
+        args: [newTicket.id, newTicket.student_id, newTicket.category, newTicket.description, newTicket.status || 'open', newTicket.created_at]
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to create ticket", e);
       throw e;
     }
+  }
+  try {
+    const all = await getSupportTickets();
+    all.push(newTicket);
+    localStorage.setItem('cynexai_local_support_tickets', JSON.stringify(all));
+  } catch (e) {
+    console.error("Deepmind: Failed to save ticket to localStorage", e);
   }
 };
 
@@ -633,10 +740,21 @@ export const updateSupportStatus = async (id: string, status: 'open' | 'resolved
         sql: "UPDATE support_tickets SET status = ? WHERE id = ?",
         args: [status, id]
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to update ticket status", e);
       throw e;
     }
+  }
+  try {
+    const all = await getSupportTickets();
+    const index = all.findIndex(t => t.id === id);
+    if (index !== -1) {
+      all[index].status = status;
+      localStorage.setItem('cynexai_local_support_tickets', JSON.stringify(all));
+    }
+  } catch (e) {
+    console.error("Deepmind: Failed to update ticket status in localStorage", e);
   }
 };
 
@@ -660,21 +778,62 @@ export const getSupportReplies = async (ticketId: string): Promise<SupportReply[
       console.error("Deepmind: Failed to fetch support replies", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_support_replies');
+    if (local) {
+      const replies = JSON.parse(local) as SupportReply[];
+      return replies.filter(r => r.ticket_id === ticketId).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+    // Seed default replies for ticket_demo_2 (resolved ticket)
+    const sampleReplies: SupportReply[] = [
+      {
+        id: 'reply_demo_1',
+        ticket_id: 'ticket_demo_2',
+        sender_id: 'demo-student-id',
+        sender_name: 'Demo Student',
+        sender_role: 'student',
+        message: 'My UPI transaction went through but the portal status shows pending.',
+        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 1000).toISOString()
+      },
+      {
+        id: 'reply_demo_2',
+        ticket_id: 'ticket_demo_2',
+        sender_id: 'admin',
+        sender_name: 'CynexAI Support',
+        sender_role: 'admin',
+        message: 'Hi! We have verified your transaction ref and updated your billing portal. Let us know if you face any issues.',
+        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 60000).toISOString()
+      }
+    ];
+    localStorage.setItem('cynexai_local_support_replies', JSON.stringify(sampleReplies));
+    return sampleReplies.filter(r => r.ticket_id === ticketId);
+  } catch {
+    return [];
+  }
 };
 
 export const createSupportReply = async (reply: Omit<SupportReply, 'created_at'>) => {
+  const newReply = { ...reply, created_at: new Date().toISOString() };
   if (isTursoConfigured && client) {
     try {
       await client.execute({
         sql: `INSERT INTO support_replies (id, ticket_id, sender_id, sender_name, sender_role, message, created_at)
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [reply.id, reply.ticket_id, reply.sender_id, reply.sender_name, reply.sender_role, reply.message, new Date().toISOString()]
+        args: [newReply.id, newReply.ticket_id, newReply.sender_id, newReply.sender_name, newReply.sender_role, newReply.message, newReply.created_at]
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to create support reply", e);
       throw e;
     }
+  }
+  try {
+    const local = localStorage.getItem('cynexai_local_support_replies');
+    const all = local ? JSON.parse(local) as SupportReply[] : [];
+    all.push(newReply);
+    localStorage.setItem('cynexai_local_support_replies', JSON.stringify(all));
+  } catch (e) {
+    console.error("Deepmind: Failed to save reply to localStorage", e);
   }
 };
 
@@ -866,8 +1025,24 @@ const STORAGE_KEY = 'cynexai_blog_posts';
 export const getAllPostsLocal = (): Post[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return [];
-    return JSON.parse(data);
+    if (data) {
+      return JSON.parse(data);
+    }
+    // Seed default posts
+    const samplePosts: Post[] = [
+      {
+        id: "welcome-to-cynexai",
+        title: "Welcome to CynexAI Blog",
+        content: "We are thrilled to welcome you to the CynexAI official learning portal and blog! Here, we share insights on Artificial Intelligence, Machine Learning, DevOps, Java enterprise development, and the future of tech. Stay tuned for expert articles, tutorials, and success stories.",
+        category: "News",
+        isVisible: true,
+        date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        image: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800"
+      },
+      ...advancedAiPosts
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(samplePosts));
+    return samplePosts;
   } catch (error) {
     console.error("Failed to parse blog posts from localStorage:", error);
     return [];
@@ -1663,22 +1838,63 @@ export const getAnnouncements = async (): Promise<Announcement[]> => {
       console.error("Failed to fetch announcements", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_announcements');
+    if (local) {
+      const items = JSON.parse(local) as Announcement[];
+      return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    // Seed announcements
+    const sampleAnnouncements: Announcement[] = [
+      {
+        id: 'ann_demo_1',
+        title: 'Welcome to CynexAI LMS Portal!',
+        message: 'Explore your customized dashboard, practice coding questions daily, check your batch recording videos, and reach out via support tickets for any queries.',
+        target_audience: 'all',
+        created_by: 'Admin',
+        created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        isActive: true
+      },
+      {
+        id: 'ann_demo_2',
+        title: 'Weekly Mock Assessment Schedule',
+        message: 'The assessment test for this week is now active under the Assessment tab. Please ensure to complete it before Sunday midnight.',
+        target_audience: 'course',
+        course_id: 'data-science-machine-learning',
+        created_by: 'Admin',
+        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        isActive: true
+      }
+    ];
+    localStorage.setItem('cynexai_local_announcements', JSON.stringify(sampleAnnouncements));
+    return sampleAnnouncements;
+  } catch {
+    return [];
+  }
 };
 
 export const createAnnouncement = async (announcement: Omit<Announcement, 'created_at'>) => {
+  const newAnn = { ...announcement, created_at: new Date().toISOString() };
   if (isTursoConfigured && client) {
     try {
       await client.execute({
         sql: `INSERT INTO announcements (id, title, message, target_audience, course_id, created_by, created_at, isActive)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [announcement.id, announcement.title, announcement.message, announcement.target_audience,
-               announcement.course_id || null, announcement.created_by, new Date().toISOString(), announcement.isActive ? 1 : 0]
+        args: [newAnn.id, newAnn.title, newAnn.message, newAnn.target_audience,
+               newAnn.course_id || null, newAnn.created_by, newAnn.created_at, newAnn.isActive ? 1 : 0]
       });
+      return;
     } catch (e) {
       console.error("Failed to create announcement", e);
       throw e;
     }
+  }
+  try {
+    const all = await getAnnouncements();
+    all.push(newAnn as Announcement);
+    localStorage.setItem('cynexai_local_announcements', JSON.stringify(all));
+  } catch (e) {
+    console.error("Failed to create announcement in localStorage", e);
   }
 };
 
@@ -1686,9 +1902,17 @@ export const deleteAnnouncement = async (id: string) => {
   if (isTursoConfigured && client) {
     try {
       await client.execute({ sql: "DELETE FROM announcements WHERE id = ?", args: [id] });
+      return;
     } catch (e) {
       console.error("Failed to delete announcement", e);
     }
+  }
+  try {
+    const all = await getAnnouncements();
+    const filtered = all.filter(a => a.id !== id);
+    localStorage.setItem('cynexai_local_announcements', JSON.stringify(filtered));
+  } catch (e) {
+    console.error("Failed to delete announcement in localStorage", e);
   }
 };
 
@@ -1696,9 +1920,20 @@ export const toggleAnnouncementStatus = async (id: string, isActive: boolean) =>
   if (isTursoConfigured && client) {
     try {
       await client.execute({ sql: "UPDATE announcements SET isActive = ? WHERE id = ?", args: [isActive ? 1 : 0, id] });
+      return;
     } catch (e) {
       console.error("Failed to toggle announcement", e);
     }
+  }
+  try {
+    const all = await getAnnouncements();
+    const index = all.findIndex(a => a.id === id);
+    if (index !== -1) {
+      all[index].isActive = isActive;
+      localStorage.setItem('cynexai_local_announcements', JSON.stringify(all));
+    }
+  } catch (e) {
+    console.error("Failed to toggle announcement status in localStorage", e);
   }
 };
 
@@ -1712,10 +1947,23 @@ export const createLesson = async (lesson: Lesson) => {
               VALUES (?, ?, ?, ?, ?, ?)`,
         args: [lesson.id, lesson.course_id, lesson.module_name, lesson.lesson_title, lesson.video_url, lesson.order_index]
       });
+      return;
     } catch (e) {
       console.error("Failed to create lesson", e);
       throw e;
     }
+  }
+  try {
+    const all = await getAllLessons();
+    const index = all.findIndex(l => l.id === lesson.id);
+    if (index !== -1) {
+      all[index] = lesson;
+    } else {
+      all.push(lesson);
+    }
+    localStorage.setItem('cynexai_local_lessons', JSON.stringify(all));
+  } catch (e) {
+    console.error("Failed to create lesson in localStorage", e);
   }
 };
 
@@ -1726,10 +1974,21 @@ export const updateLesson = async (lesson: Lesson) => {
         sql: `UPDATE lessons SET module_name=?, lesson_title=?, video_url=?, order_index=? WHERE id=?`,
         args: [lesson.module_name, lesson.lesson_title, lesson.video_url, lesson.order_index, lesson.id]
       });
+      return;
     } catch (e) {
       console.error("Failed to update lesson", e);
       throw e;
     }
+  }
+  try {
+    const all = await getAllLessons();
+    const index = all.findIndex(l => l.id === lesson.id);
+    if (index !== -1) {
+      all[index] = lesson;
+      localStorage.setItem('cynexai_local_lessons', JSON.stringify(all));
+    }
+  } catch (e) {
+    console.error("Failed to update lesson in localStorage", e);
   }
 };
 
@@ -1737,9 +1996,17 @@ export const deleteLesson = async (id: string) => {
   if (isTursoConfigured && client) {
     try {
       await client.execute({ sql: "DELETE FROM lessons WHERE id = ?", args: [id] });
+      return;
     } catch (e) {
       console.error("Failed to delete lesson", e);
     }
+  }
+  try {
+    const all = await getAllLessons();
+    const filtered = all.filter(l => l.id !== id);
+    localStorage.setItem('cynexai_local_lessons', JSON.stringify(filtered));
+  } catch (e) {
+    console.error("Failed to delete lesson in localStorage", e);
   }
 };
 
@@ -1752,7 +2019,41 @@ export const getAllLessons = async (): Promise<Lesson[]> => {
       console.error("Failed to fetch all lessons", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_lessons');
+    if (local) {
+      return JSON.parse(local) as Lesson[];
+    }
+    const sampleLessons: Lesson[] = [
+      // Data Science & Machine Learning
+      { id: 'ds_l1', course_id: 'data-science-machine-learning', module_name: 'Python Programming Fundamentals', lesson_title: 'Introduction to Data Science & Jupyter Notebooks', video_url: 'https://www.youtube.com/embed/ua-CiDNNj30', order_index: 1 },
+      { id: 'ds_l2', course_id: 'data-science-machine-learning', module_name: 'Data Manipulation with Pandas & NumPy', lesson_title: 'Pandas & NumPy Deep Dive for Beginners', video_url: 'https://www.youtube.com/embed/rfscVS0vtbw', order_index: 2 },
+      { id: 'ds_l3', course_id: 'data-science-machine-learning', module_name: 'Supervised Machine Learning Algorithms', lesson_title: 'Introduction to Supervised Machine Learning', video_url: 'https://www.youtube.com/embed/GwIo3gToVQM', order_index: 3 },
+      { id: 'ds_l4', course_id: 'data-science-machine-learning', module_name: 'Deep Learning with TensorFlow & Keras', lesson_title: 'Deep Learning Foundations with TensorFlow', video_url: 'https://www.youtube.com/embed/aircAruvnKk', order_index: 4 },
+
+      // Artificial Intelligence & Generative AI
+      { id: 'ai_l1', course_id: 'artificial-intelligence-generative-ai', module_name: 'Introduction to AI & Deep Learning', lesson_title: 'Introduction to Artificial Intelligence & Deep Learning', video_url: 'https://www.youtube.com/embed/Jgvyz2fK-a4', order_index: 1 },
+      { id: 'ai_l2', course_id: 'artificial-intelligence-generative-ai', module_name: 'Generative Adversarial Networks (GANs)', lesson_title: 'Generative Adversarial Networks (GANs) Explained', video_url: 'https://www.youtube.com/embed/8L11aMN5KY8', order_index: 2 },
+      { id: 'ai_l3', course_id: 'artificial-intelligence-generative-ai', module_name: 'Large Language Models (LLMs) & Transformers', lesson_title: 'Introduction to Transformers & Hugging Face', video_url: 'https://www.youtube.com/embed/XfpMkf4rD6E', order_index: 3 },
+      { id: 'ai_l4', course_id: 'artificial-intelligence-generative-ai', module_name: 'Prompt Engineering & Fine-tuning LLMs', lesson_title: 'Prompt Engineering & LLM Orchestration', video_url: 'https://www.youtube.com/embed/mJCckqQ96gc', order_index: 4 },
+
+      // Full Stack Java Development
+      { id: 'java_l1', course_id: 'full-stack-java-development', module_name: 'Java Core & OOP', lesson_title: 'Java Programming Basics & OOP Foundations', video_url: 'https://www.youtube.com/embed/grEKMHGYync', order_index: 1 },
+      { id: 'java_l2', course_id: 'full-stack-java-development', module_name: 'SQL & Database Management', lesson_title: 'Introduction to Relational Databases & SQL', video_url: 'https://www.youtube.com/embed/HXV3zeQKqGY', order_index: 2 },
+      { id: 'java_l3', course_id: 'full-stack-java-development', module_name: 'Spring Boot & Microservices', lesson_title: 'Building REST APIs with Spring Boot', video_url: 'https://www.youtube.com/embed/vtPkDP3DF5A', order_index: 3 },
+      { id: 'java_l4', course_id: 'full-stack-java-development', module_name: 'Frontend Development', lesson_title: 'Connecting React Frontend to Spring Boot Backend', video_url: 'https://www.youtube.com/embed/2u3IcrgVnEg', order_index: 4 },
+
+      // DevOps & Cloud Technologies
+      { id: 'devops_l1', course_id: 'devops-cloud-technologies', module_name: 'DevOps & Cloud Technologies', lesson_title: 'Introduction to DevOps Principles & AWS Cloud', video_url: 'https://www.youtube.com/embed/j5Zsa_eOXeY', order_index: 1 },
+      { id: 'devops_l2', course_id: 'devops-cloud-technologies', module_name: 'CI/CD Pipelines', lesson_title: 'Continuous Integration & Deployment (CI/CD) Pipelines', video_url: 'https://www.youtube.com/embed/scEDHsr3APg', order_index: 2 },
+      { id: 'devops_l3', course_id: 'devops-cloud-technologies', module_name: 'Docker & Containerization', lesson_title: 'Docker Containers for Software Engineers', video_url: 'https://www.youtube.com/embed/3c-iFnDcCD0', order_index: 3 },
+      { id: 'devops_l4', course_id: 'devops-cloud-technologies', module_name: 'Kubernetes', lesson_title: 'Kubernetes Orchestration from Scratch', video_url: 'https://www.youtube.com/embed/X48VuDVv0do', order_index: 4 }
+    ];
+    localStorage.setItem('cynexai_local_lessons', JSON.stringify(sampleLessons));
+    return sampleLessons;
+  } catch {
+    return [];
+  }
 };
 
 // --- ADMIN BADGE CRUD ---
@@ -1766,7 +2067,12 @@ export const getAllBadges = async (): Promise<Badge[]> => {
       console.error("Failed to fetch all badges", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_badges');
+    return local ? JSON.parse(local) : [];
+  } catch {
+    return [];
+  }
 };
 
 export const createBadge = async (badge: Badge) => {
@@ -1777,10 +2083,19 @@ export const createBadge = async (badge: Badge) => {
               VALUES (?, ?, ?, ?, ?, ?)`,
         args: [badge.id, badge.student_id, badge.title, badge.icon, badge.color, badge.unlocked_at || new Date().toISOString()]
       });
+      return;
     } catch (e) {
       console.error("Failed to create badge", e);
       throw e;
     }
+  }
+  try {
+    const local = localStorage.getItem('cynexai_local_badges');
+    const all = local ? JSON.parse(local) as Badge[] : [];
+    all.push(badge);
+    localStorage.setItem('cynexai_local_badges', JSON.stringify(all));
+  } catch (e) {
+    console.error("Failed to create badge in localStorage", e);
   }
 };
 
@@ -1788,9 +2103,20 @@ export const deleteBadge = async (id: string) => {
   if (isTursoConfigured && client) {
     try {
       await client.execute({ sql: "DELETE FROM badges WHERE id = ?", args: [id] });
+      return;
     } catch (e) {
       console.error("Failed to delete badge", e);
     }
+  }
+  try {
+    const local = localStorage.getItem('cynexai_local_badges');
+    if (local) {
+      const all = JSON.parse(local) as Badge[];
+      const filtered = all.filter(b => b.id !== id);
+      localStorage.setItem('cynexai_local_badges', JSON.stringify(filtered));
+    }
+  } catch (e) {
+    console.error("Failed to delete badge in localStorage", e);
   }
 };
 
@@ -3149,7 +3475,145 @@ export const getCourses = async (includeHidden: boolean = false): Promise<Course
     }
   }
   
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_courses');
+    if (local) {
+      const parsed = JSON.parse(local) as Course[];
+      return includeHidden ? parsed : parsed.filter(c => c.isVisible);
+    }
+    const sampleCourses = [
+      {
+        id: 'data-science-machine-learning',
+        title: 'Data Science & Machine Learning',
+        subtitle: 'Unlock Insights from Data & Build Predictive Models',
+        description: 'Master data analysis, machine learning algorithms, and AI implementation with our comprehensive Data Science course in Hyderabad. This program is designed for aspiring data scientists looking for the best AI training institute in KPHB.',
+        image: 'https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=800',
+        duration: '6 months',
+        placement: '95%',
+        students: '150+',
+        rating: 4.9,
+        level: 'Intermediate',
+        skills: JSON.stringify(['Python', 'TensorFlow', 'Pandas', 'Scikit-learn', 'NumPy', 'Matplotlib', 'Jupyter', 'SQL', 'Git']),
+        modules: JSON.stringify(['Python Programming Fundamentals', 'Statistics and Probability for Data Science', 'Data Manipulation with Pandas & NumPy', 'Data Visualization with Matplotlib, Seaborn & Plotly', 'Supervised Machine Learning Algorithms', 'Unsupervised Learning and Clustering', 'Deep Learning with TensorFlow & Keras', 'Natural Language Processing (NLP) Basics', 'Model Evaluation, Optimization & Deployment', 'Capstone Project: Real-world Data Science Application']),
+        outcomes: JSON.stringify(['Build end-to-end machine learning pipelines', 'Implement deep learning models for various applications', 'Create interactive data visualizations and dashboards', 'Deploy ML models to production environments', 'Apply AI solutions to complex business problems', 'Interpret and communicate data-driven insights effectively']),
+        prerequisites: JSON.stringify(['Basic programming knowledge (Python preferred)', 'High school level mathematics (algebra, basic calculus)', 'Familiarity with basic statistics concepts']),
+        career: JSON.stringify(['Data Scientist', 'Machine Learning Engineer', 'AI/ML Engineer', 'Data Analyst', 'Business Intelligence Developer']),
+        isVisible: true
+      },
+      {
+        id: 'artificial-intelligence-generative-ai',
+        title: 'Artificial Intelligence & Generative AI',
+        subtitle: 'Innovate with AI-Powered Content and Intelligent Systems',
+        description: 'Deep dive into advanced AI concepts with our Generative AI course in India. This online and classroom training in Hyderabad covers neural networks and cutting-edge generative models to build intelligent systems.',
+        image: 'https://images.pexels.com/photos/8386434/pexels-photo-8386434.jpeg?auto=compress&cs=tinysrgb&w=800',
+        duration: '6 months',
+        placement: '98%',
+        students: '200+',
+        rating: 4.8,
+        level: 'Advanced',
+        skills: JSON.stringify(['Python', 'PyTorch', 'TensorFlow', 'Keras', 'Hugging Face', 'GANs', 'VAEs', 'Diffusion Models', 'NLP']),
+        modules: JSON.stringify(['Introduction to AI & Deep Learning', 'Advanced Neural Network Architectures', 'Generative Adversarial Networks (GANs)', 'Variational Autoencoders (VAEs)', 'Diffusion Models for Image & Video Generation', 'Large Language Models (LLMs) & Transformers', 'Prompt Engineering & Fine-tuning LLMs', 'Ethical AI & Bias in Generative Models', 'Deployment of Generative AI Solutions', 'Final Project: Building a Generative AI Application']),
+        outcomes: JSON.stringify(['Design and implement state-of-the-art AI systems', 'Generate high-quality images, text, and other creative content', 'Master prompt engineering for optimal AI performance', 'Understand and mitigate ethical biases in AI models', 'Deploy advanced AI models to production environments', 'Contribute to innovative AI research and development']),
+        prerequisites: JSON.stringify(['Strong Python programming skills', 'Familiarity with basic machine learning concepts', 'Understanding of linear algebra and calculus']),
+        career: JSON.stringify(['AI Engineer', 'Generative AI Specialist', 'Machine Learning Researcher', 'Prompt Engineer', 'Computer Vision Engineer (Generative)']),
+        isVisible: true
+      },
+      {
+        id: 'full-stack-java-development',
+        title: 'Full Stack Java Development',
+        subtitle: 'Become a Versatile Java Developer for Web & Enterprise',
+        description: 'Enroll in our Full Stack Developer course in India to build robust web applications from frontend to backend. This program in Hyderabad covers Java, Spring Boot, and modern frontend technologies to make you a job-ready developer.',
+        image: '/java.png',
+        duration: '6 months',
+        placement: '92%',
+        students: '120+',
+        rating: 4.7,
+        level: 'Intermediate',
+        skills: JSON.stringify(['Java', 'Spring Boot', 'Spring MVC', 'Hibernate', 'SQL', 'React/Angular', 'JavaScript', 'REST APIs', 'Git', 'Maven/Gradle']),
+        modules: JSON.stringify(['Java Core & OOP', 'Data Structures & Algorithms in Java', 'SQL & Database Management (MySQL/PostgreSQL)', 'Spring Framework (Core, MVC, Security)', 'Spring Boot & Microservices', 'RESTful API Development', 'Frontend Development (HTML, CSS, JavaScript, React/Angular)', 'Version Control with Git', 'Deployment to Cloud (e.g., AWS EC2/Elastic Beanstalk)', 'Full Stack Capstone Project']),
+        outcomes: JSON.stringify(['Develop scalable backend services with Spring Boot', 'Build dynamic and responsive frontend user interfaces', 'Design and manage relational databases', 'Implement secure and robust authentication/authorization', 'Deploy full-stack applications to cloud platforms', 'Work effectively in Agile development environments']),
+        prerequisites: JSON.stringify(['Basic programming knowledge (any language)', 'Understanding of web concepts (HTTP, client-server)', 'Eagerness to learn both frontend and backend']),
+        career: JSON.stringify(['Full Stack Java Developer', 'Backend Java Developer', 'Software Engineer (Java)', 'Spring Boot Developer', 'Enterprise Application Developer']),
+        isVisible: true
+      },
+      {
+        id: 'devops-cloud-technologies',
+        title: 'DevOps & Cloud Technologies',
+        subtitle: 'Streamline Software Delivery with Cloud & Automation',
+        description: 'Our DevOps & Cloud training helps you master cloud infrastructure, CI/CD pipelines, and deployment strategies. Learn how to become a DevOps engineer with hands-on training on AWS, Azure, and other cloud computing certification tools in Hyderabad.',
+        image: '/Devops.png',
+        duration: '6 months',
+        placement: '96%',
+        students: '180+',
+        rating: 4.8,
+        level: 'Intermediate',
+        skills: JSON.stringify(['AWS', 'Azure/GCP', 'Docker', 'Kubernetes', 'Jenkins', 'Terraform', 'Ansible', 'Git', 'Linux', 'Shell Scripting']),
+        modules: JSON.stringify(['Linux Fundamentals & Shell Scripting', 'Introduction to Cloud Computing (AWS Focus)', 'Infrastructure as Code (IaC) with Terraform', 'Containerization with Docker', 'Container Orchestration with Kubernetes', 'CI/CD Pipelines with Jenkins/GitLab CI/GitHub Actions', 'Monitoring and Logging (Prometheus, Grafana, ELK Stack)', 'Networking in Cloud', 'Security in DevOps', 'Project: Deploying a Scalable Application']),
+        outcomes: JSON.stringify(['Automate software build, test, and deployment processes', 'Manage and scale cloud infrastructure efficiently', 'Implement robust CI/CD pipelines', 'Containerize and orchestrate applications', 'Monitor and troubleshoot cloud-native applications', 'Apply security best practices in a DevOps workflow']),
+        prerequisites: JSON.stringify(['Basic understanding of IT operations', 'Familiarity with command line interfaces', 'Some programming experience is beneficial']),
+        career: JSON.stringify(['DevOps Engineer', 'Cloud Engineer', 'Site Reliability Engineer (SRE)', 'Cloud Architect', 'Automation Engineer']),
+        isVisible: true
+      },
+      {
+        id: 'python-programming',
+        title: 'Python Programming',
+        subtitle: 'Master the Versatile Language for Data, Web & Automation',
+        description: 'Master Python fundamentals with our dedicated Python for AI course. This program is perfect for beginners and professionals in Hyderabad looking to build a strong foundation for data analysis, web development, and automation.',
+        image: 'https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=800',
+        duration: '6 months',
+        placement: '90%',
+        students: '250+',
+        rating: 4.7,
+        level: 'Beginner',
+        skills: JSON.stringify(['Python', 'OOP', 'Data Structures', 'Flask/Django (basics)', 'Pandas (basics)', 'API usage', 'Git']),
+        modules: JSON.stringify(['Python Basics & Syntax', 'Data Types & Data Structures', 'Control Flow & Functions', 'Object-Oriented Programming (OOP) in Python', 'File Handling & Error Handling', 'Modules, Packages & Pip', 'Introduction to Web Development with Flask/Django', 'Data Manipulation with Pandas (Intro)', 'Automation & Scripting', 'Final Mini-Projects']),
+        outcomes: JSON.stringify(['Write clean, efficient, and well-structured Python code', 'Automate repetitive tasks with Python scripts', 'Develop basic web applications', 'Perform data manipulation and analysis', 'Solve algorithmic problems using Python', 'Build a strong foundation for advanced Python careers']),
+        prerequisites: JSON.stringify(['No prior programming experience required', 'Basic computer literacy']),
+        career: JSON.stringify(['Python Developer', 'Automation Engineer', 'Junior Data Analyst', 'Web Developer (Python)', 'Software Engineer (Entry-Level)']),
+        isVisible: true
+      },
+      {
+        id: 'software-testing-manual-automation',
+        title: 'Software Testing (Manual + Automation)',
+        subtitle: 'Ensure Quality & Reliability in Software Products',
+        description: 'Master software testing with our comprehensive course covering manual and automation frameworks. This training in KPHB, Hyderabad, prepares you for a successful career in quality assurance with hands-on experience.',
+        image: 'https://images.pexels.com/photos/1181263/pexels-photo-1181263.jpeg?auto=compress&cs=tinysrgb&w=800',
+        duration: '6 months',
+        placement: '91%',
+        students: '140+',
+        rating: 4.5,
+        level: 'Intermediate',
+        skills: JSON.stringify(['Manual Testing', 'Test Case Design', 'Selenium', 'Jira', 'Agile', 'API Testing', 'Java/Python (for automation)', 'SQL']),
+        modules: JSON.stringify(['Software Development Life Cycle (SDLC) & STLC', 'Manual Testing Fundamentals (Types, Techniques)', 'Test Case Design & Execution', 'Defect Reporting & Management (Jira)', 'Agile Testing Principles', 'Introduction to Automation Testing', 'Selenium WebDriver with Java/Python', 'TestNG/Pytest Frameworks', 'API Testing with Postman/Rest Assured', 'Performance Testing Basics (JMeter)']),
+        outcomes: JSON.stringify(['Design comprehensive test plans and strategies', 'Execute manual tests and report defects effectively', 'Automate web and API test cases using industry tools', 'Participate in Agile development cycles as a QA', 'Ensure high-quality software releases', 'Understand different types of software testing']),
+        prerequisites: JSON.stringify(['Basic computer knowledge and analytical skills', 'Familiarity with web applications is a plus', 'No prior coding experience required for manual section']),
+        career: JSON.stringify(['QA Engineer', 'Manual Tester', 'Automation Test Engineer', 'Software Test Lead', 'Performance Tester']),
+        isVisible: true
+      },
+      {
+        id: 'sap-data-processing',
+        title: 'SAP (Systems, Applications, and Products in Data Processing)',
+        subtitle: 'Master Enterprise Resource Planning with SAP Solutions',
+        description: 'Learn enterprise resource planning with our expert-led SAP training in Hyderabad. This course covers key SAP modules, business process optimization, and implementation strategies for various industries.',
+        image: 'https://images.pexels.com/photos/1181316/pexels-photo-1181316.jpeg?auto=compress&cs=tinysrgb&w=800',
+        duration: '6 months',
+        placement: '94%',
+        students: '90+',
+        rating: 4.6,
+        level: 'Professional',
+        skills: JSON.stringify(['SAP HANA', 'ABAP', 'Fiori', 'S/4HANA', 'ERP Concepts', 'SAP Modules (FI, CO, MM, SD)', 'Business Process Optimization']),
+        modules: JSON.stringify(['Introduction to SAP & ERP Concepts', 'SAP ABAP Programming (Fundamentals)', 'SAP Financial Accounting (FI)', 'SAP Controlling (CO)', 'SAP Materials Management (MM)', 'SAP Sales and Distribution (SD)', 'SAP HANA Overview', 'SAP Fiori & UI5 Basics', 'SAP Implementation Methodologies (ASAP/Activate)', 'Case Study & Project']),
+        outcomes: JSON.stringify(['Navigate and operate within the SAP system', 'Understand key SAP modules and their integration', 'Develop custom reports and programs using ABAP', 'Participate in SAP implementation and support projects', 'Optimize business processes using SAP functionalities', 'Gain expertise in a high-demand enterprise technology']),
+        prerequisites: JSON.stringify(['Basic understanding of business processes', 'Familiarity with IT systems is beneficial', 'No prior SAP experience required']),
+        career: JSON.stringify(['SAP Consultant (Functional/Technical)', 'SAP Analyst', 'ERP Specialist', 'SAP Business Process Analyst', 'SAP Basis Administrator (Entry-Level)']),
+        isVisible: true
+      }
+    ];
+    localStorage.setItem('cynexai_local_courses', JSON.stringify(sampleCourses));
+    return includeHidden ? sampleCourses : sampleCourses.filter(c => c.isVisible);
+  } catch {
+    return [];
+  }
 };
 
 export const createCourse = async (course: Course) => {
@@ -3180,10 +3644,23 @@ export const createCourse = async (course: Course) => {
           course.isVisible ? 1 : 0
         ]
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to create course in Turso:", e);
       throw e;
     }
+  }
+  try {
+    const all = await getCourses(true);
+    const index = all.findIndex(c => c.id === course.id);
+    if (index !== -1) {
+      all[index] = course;
+    } else {
+      all.push(course);
+    }
+    localStorage.setItem('cynexai_local_courses', JSON.stringify(all));
+  } catch (e) {
+    console.error("Deepmind: Failed to save course to localStorage", e);
   }
 };
 
@@ -3205,10 +3682,21 @@ export const updateCourse = async (course: Partial<Course> & { id: string }) => 
         sql: `UPDATE courses SET ${sets.join(', ')} WHERE id = ?`,
         args
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to update course in Turso:", e);
       throw e;
     }
+  }
+  try {
+    const all = await getCourses(true);
+    const index = all.findIndex(c => c.id === course.id);
+    if (index !== -1) {
+      all[index] = { ...all[index], ...course };
+      localStorage.setItem('cynexai_local_courses', JSON.stringify(all));
+    }
+  } catch (e) {
+    console.error("Deepmind: Failed to update course in localStorage", e);
   }
 };
 
@@ -3219,10 +3707,18 @@ export const deleteCourse = async (id: string) => {
         sql: "DELETE FROM courses WHERE id = ?",
         args: [id]
       });
+      return;
     } catch (e) {
       console.error("Deepmind: Failed to delete course in Turso:", e);
       throw e;
     }
+  }
+  try {
+    const all = await getCourses(true);
+    const filtered = all.filter(c => c.id !== id);
+    localStorage.setItem('cynexai_local_courses', JSON.stringify(filtered));
+  } catch (e) {
+    console.error("Deepmind: Failed to delete course in localStorage", e);
   }
 };
 
@@ -3367,7 +3863,21 @@ export const getBadges = async (studentId: string): Promise<Badge[]> => {
       console.error("Failed to fetch badges", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_badges');
+    if (local) {
+      const all = JSON.parse(local) as Badge[];
+      return all.filter(b => b.student_id === studentId);
+    }
+    const sampleBadges: Badge[] = [
+      { id: 'b1_demo', student_id: 'demo-student-id', title: 'Alpha Protocol', icon: 'Zap', color: 'text-yellow-400', unlocked_at: new Date().toISOString() },
+      { id: 'b2_demo', student_id: 'demo-student-id', title: 'Code Vanguard', icon: 'Rocket', color: 'text-[#41c8df]', unlocked_at: new Date().toISOString() }
+    ];
+    localStorage.setItem('cynexai_local_badges', JSON.stringify(sampleBadges));
+    return sampleBadges.filter(b => b.student_id === studentId);
+  } catch {
+    return [];
+  }
 };
 
 export const getJobListings = async (): Promise<JobListing[]> => {
@@ -3379,7 +3889,22 @@ export const getJobListings = async (): Promise<JobListing[]> => {
       console.error("Failed to fetch jobs", e);
     }
   }
-  return [];
+  try {
+    const local = localStorage.getItem('cynexai_local_jobs');
+    if (local) {
+      return JSON.parse(local) as JobListing[];
+    }
+    const sampleJobs: JobListing[] = [
+      { id: 'job_1', title: 'AI Systems Architect', company: 'Google Deepmind', location: 'London, UK', salary: '$160k - $220k', description: 'Sample job description', type: 'full-time', category: 'Artificial Intelligence', created_at: new Date().toISOString() },
+      { id: 'job_2', title: 'Senior Java Developer', company: 'Amazon', location: 'Hyderabad, IN', salary: '₹25 - 45 LPA', description: 'Sample job description', type: 'full-time', category: 'Software Engineering', created_at: new Date().toISOString() },
+      { id: 'job_3', title: 'MLOps Engineer', company: 'OpenAI', location: 'San Francisco, CA', salary: '$180k - $250k', description: 'Sample job description', type: 'internship', category: 'Data Science', created_at: new Date().toISOString() },
+      { id: 'job_4', title: 'Junior Frontend Engineer', company: 'CynexAI', location: 'Bangalore, IN', salary: '₹12 - 18 LPA', description: 'Sample job description', type: 'part-time', category: 'Web Development', created_at: new Date().toISOString() }
+    ];
+    localStorage.setItem('cynexai_local_jobs', JSON.stringify(sampleJobs));
+    return sampleJobs;
+  } catch {
+    return [];
+  }
 };
 
 export const getMentorshipSessions = async (studentId: string): Promise<MentorshipSession[]> => {
@@ -3563,6 +4088,76 @@ export const getReviews = async (includeHidden = false): Promise<Review[]> => {
       const localReviews = JSON.parse(localReviewsStr) as Review[];
       return includeHidden ? localReviews : localReviews.filter(r => r.isVisible);
     }
+    const sampleReviews: Review[] = [
+      {
+        id: 'rev_1',
+        name: 'Anil Kumar',
+        role: 'Java Developer at BeamX Techlab',
+        course: 'Full Stack Java',
+        rating: 5,
+        text: 'CynexAI gave me the skills and confidence I needed to land my first job in tech. The trainers are industry experts and the placement support is truly effective.',
+        image: 'gallery_images/WhatsApp%20Image%202025-07-28%20at%2016.47.23_9abc2e80.jpg?version%3D1755168647258',
+        isVisible: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'rev_2',
+        name: 'Suresh Kumar',
+        role: 'Python Developer at Wexl Edu Pvt Ltd',
+        course: 'Full Stack Python',
+        rating: 5,
+        text: 'From day one, the learning experience was smooth, practical, and job-focused. I highly recommend CynexAI to anyone serious about starting a tech career.',
+        image: 'gallery_images/WhatsApp Image 2025-07-28 at 16.48.15_34734bc2.jpg',
+        isVisible: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'rev_3',
+        name: 'Y. Bhavana',
+        role: 'Web Developer at Zuper Pvt Ltd',
+        course: 'Web development',
+        rating: 5,
+        text: 'The Web Development course at CynexAI helped me build real websites from scratch. HTML, CSS, JavaScript, and React were taught in a very easy-to-understand way.',
+        image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.01.27_a8763108.jpg',
+        isVisible: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'rev_4',
+        name: 'K. Pullaiah',
+        role: 'Software Tester at Persistent Systems',
+        course: 'Testing (Manual + Automation)',
+        rating: 5,
+        text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly.",
+        image: 'gallery_images/WhatsApp Image 2025-07-28 at 17.17.45_290e8232.jpg',
+        isVisible: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'rev_5',
+        name: 'Chandrashekar',
+        role: 'Software Tester at Paramount Software',
+        course: 'Testing (Auto + Manual)',
+        rating: 5,
+        text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly",
+        image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.53.04_4aea19f7.jpg',
+        isVisible: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'rev_6',
+        name: 'Sai Nath',
+        role: 'Web Developer at Cognizent',
+        course: 'Full Stack',
+        rating: 5,
+        text: "CynexAI's software testing course gave me a strong foundation in both manual and automation testing. The real-time projects and Selenium sessions helped me get placed quickly",
+        image: 'gallery_images/WhatsApp Image 2025-07-30 at 13.50.41_ed43fe99.jpg',
+        isVisible: true,
+        created_at: new Date().toISOString()
+      }
+    ];
+    localStorage.setItem('cynexai_local_testimonials', JSON.stringify(sampleReviews));
+    return includeHidden ? sampleReviews : sampleReviews.filter(r => r.isVisible);
   } catch (e) {
     console.error("Failed to parse local reviews", e);
   }
@@ -4375,6 +4970,19 @@ export const getCodeSubmissionsByStudent = async (studentId: string): Promise<Co
   return [];
 };
 
+export const getAllCodeSubmissions = async (): Promise<CodeSubmission[]> => {
+  if (isTursoConfigured && client && !dbConnectionFailed) {
+    try {
+      const result = await client.execute("SELECT * FROM code_submissions ORDER BY submitted_at DESC");
+      return result.rows as unknown as CodeSubmission[];
+    } catch (e) {
+      console.error('Failed to get all code submissions', e);
+    }
+  }
+  return [];
+};
+
+
 export const createCodeSubmission = async (submission: CodeSubmission): Promise<void> => {
   if (isTursoConfigured && client && !dbConnectionFailed) {
     try {
@@ -4649,7 +5257,37 @@ export const getDailyRecordings = async (): Promise<DailyRecording[]> => {
   }
   try {
     const local = localStorage.getItem(RECORDINGS_LOCAL_KEY);
-    return local ? JSON.parse(local) : [];
+    if (local) return JSON.parse(local);
+    
+    // Seed default recordings
+    const defaultRecordings: DailyRecording[] = [
+      {
+        id: 'rec_demo_1',
+        batch_id: 'batch_demo',
+        subject: 'Python Core',
+        title: 'Functions & Modules in Python',
+        description: 'Detailed explanation of Python functions, scopes, parameters, args, kwargs, and module imports.',
+        video_url: 'https://www.youtube.com/embed/ua-CiDNNj30',
+        duration: '1h 15m',
+        recording_date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        chapters: JSON.stringify([{ time: '00:00', title: 'Intro' }, { time: '10:00', title: 'Defining Functions' }, { time: '35:00', title: '*args and **kwargs' }]),
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'rec_demo_2',
+        batch_id: 'batch_demo',
+        subject: 'Pandas',
+        title: 'Exploratory Data Analysis using Pandas Dataframes',
+        description: 'Hands-on session using pandas to load, inspect, clean, and run basic statistics on a dataset.',
+        video_url: 'https://www.youtube.com/embed/rfscVS0vtbw',
+        duration: '1h 30m',
+        recording_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        chapters: JSON.stringify([{ time: '00:00', title: 'Overview' }, { time: '15:00', title: 'Loading CSV Data' }, { time: '45:00', title: 'Filtering and GroupBy' }]),
+        created_at: new Date().toISOString()
+      }
+    ];
+    localStorage.setItem(RECORDINGS_LOCAL_KEY, JSON.stringify(defaultRecordings));
+    return defaultRecordings;
   } catch {
     return [];
   }

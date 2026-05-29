@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Edit2, Trash2, Video, Calendar, Clock, AlertCircle, CheckCircle2,
-  BookOpen, Layers, X, PlusCircle, Trash, ListOrdered, UploadCloud
+  BookOpen, Layers, X, PlusCircle, Trash, ListOrdered, UploadCloud, Download
 } from 'lucide-react';
 import {
   getBatches, createBatch, updateBatch, deleteBatch,
@@ -18,6 +18,64 @@ export const AdminRecordings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadBatches = () => {
+    const data = batches.map(b => {
+      const course = courses.find(c => c.id === b.course_id);
+      return {
+        ID: b.id,
+        Name: b.name,
+        Course: course ? course.title : 'General'
+      };
+    });
+    exportToCSV(data, 'batches_sections_report.csv', ['Section ID', 'Section Name', 'Assigned Course']);
+  };
+
+  const handleDownloadRecordings = () => {
+    const data = recordings.map(r => {
+      const batch = batches.find(b => b.id === r.batch_id);
+      return {
+        ID: r.id,
+        Batch: batch ? batch.name : r.batch_id,
+        Subject: r.subject,
+        Title: r.title,
+        Description: r.description || 'N/A',
+        VideoURL: r.video_url,
+        Duration: r.duration || 'N/A',
+        Date: r.recording_date
+      };
+    });
+    exportToCSV(data, 'class_recordings_report.csv', ['Recording ID', 'Section Name', 'Subject', 'Title', 'Description', 'Video URL', 'Duration', 'Recording Date']);
+  };
 
   // File Upload states
   const [uploading, setUploading] = useState(false);
@@ -388,6 +446,15 @@ export const AdminRecordings: React.FC = () => {
         <div className="lg:col-span-1 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Active Batches / Sections ({batches.length})</h3>
+            {batches.length > 0 && (
+              <button
+                onClick={handleDownloadBatches}
+                className="inline-flex items-center text-[10px] font-bold text-[#41c8df] hover:underline"
+                title="Download batches as CSV"
+              >
+                <Download className="w-3 h-3 mr-1" /> Download
+              </button>
+            )}
           </div>
 
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1 no-scrollbar">
@@ -437,7 +504,18 @@ export const AdminRecordings: React.FC = () => {
 
         {/* Daily Class Recordings Column */}
         <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Class Recordings Archive ({recordings.length})</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Class Recordings Archive ({recordings.length})</h3>
+            {recordings.length > 0 && (
+              <button
+                onClick={handleDownloadRecordings}
+                className="inline-flex items-center text-[10px] font-bold text-[#41c8df] hover:underline"
+                title="Download class recordings as CSV"
+              >
+                <Download className="w-3 h-3 mr-1" /> Download
+              </button>
+            )}
+          </div>
 
           <div className="bg-background/20 border border-secondary/10 rounded-[2.5rem] overflow-hidden shadow-xl">
             {loading ? (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Award, Search, Plus, Trash2, Eye, X, Calendar, ShieldCheck, Printer, Key, Upload, FileCheck
+  Award, Search, Plus, Trash2, Eye, EyeOff, X, Calendar, ShieldCheck, Printer, Key, Upload, FileCheck, Download
 } from 'lucide-react';
 import { 
   getAllCertificates, 
@@ -28,6 +28,56 @@ export const AdminCertificates: React.FC<AdminCertificatesProps> = ({
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadRegistry = () => {
+    const data = certificates.map(c => ({
+      CredentialID: c.id,
+      StudentName: c.student_name,
+      CourseTitle: c.course_title,
+      IssuedAt: c.issued_at
+    }));
+    exportToCSV(data, 'certificates_registry.csv', ['Credential ID', 'Student Name', 'Course Title', 'Issued At']);
+  };
+
+  const handleDownloadCredentials = () => {
+    const data = studentUsers.map(u => ({
+      StudentID: u.id,
+      StudentName: u.name,
+      Email: u.email,
+      Phone: u.phone || 'N/A',
+      BatchID: u.batch_id || 'N/A'
+    }));
+    exportToCSV(data, 'student_portal_credentials.csv', ['Student ID', 'Student Name', 'Email', 'Phone', 'Batch ID']);
+  };
   
   // Portal Credentials State (Uses main Users table)
   const [studentUsers, setStudentUsers] = useState<User[]>([]);
@@ -40,6 +90,7 @@ export const AdminCertificates: React.FC<AdminCertificatesProps> = ({
     phone: '',
     photo_url: ''
   });
+  const [showCredPassword, setShowCredPassword] = useState(false);
 
   // Upload State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -110,7 +161,19 @@ export const AdminCertificates: React.FC<AdminCertificatesProps> = ({
       return;
     }
 
-    const certNumber = `CYNEX-${new Date().getFullYear()}-${String(certificates.length + 1).padStart(5, '0')}`;
+    // Find the highest sequence number for CYNEX certificates to avoid unique key conflicts on deletions
+    const cynexCerts = certificates.filter(c => c.certificate_number.startsWith(`CYNEX-${new Date().getFullYear()}-`));
+    let nextNum = 1;
+    if (cynexCerts.length > 0) {
+      const numbers = cynexCerts.map(c => {
+        const parts = c.certificate_number.split('-');
+        const lastPart = parts[parts.length - 1];
+        const num = parseInt(lastPart, 10);
+        return isNaN(num) ? 0 : num;
+      });
+      nextNum = Math.max(...numbers) + 1;
+    }
+    const certNumber = `CYNEX-${new Date().getFullYear()}-${String(nextNum).padStart(5, '0')}`;
     const newCert: Certificate = {
       id: crypto.randomUUID(),
       student_id: student.id,
@@ -192,7 +255,19 @@ export const AdminCertificates: React.FC<AdminCertificatesProps> = ({
       return;
     }
 
-    const certNumber = `PORTAL-${new Date().getFullYear()}-${String(certificates.length + 1).padStart(5, '0')}`;
+    // Find the highest sequence number for PORTAL certificates to avoid unique key conflicts on deletions
+    const portalCerts = certificates.filter(c => c.certificate_number.startsWith(`PORTAL-${new Date().getFullYear()}-`));
+    let nextNum = 1;
+    if (portalCerts.length > 0) {
+      const numbers = portalCerts.map(c => {
+        const parts = c.certificate_number.split('-');
+        const lastPart = parts[parts.length - 1];
+        const num = parseInt(lastPart, 10);
+        return isNaN(num) ? 0 : num;
+      });
+      nextNum = Math.max(...numbers) + 1;
+    }
+    const certNumber = `PORTAL-${new Date().getFullYear()}-${String(nextNum).padStart(5, '0')}`;
     
     try {
       await issueCertificate({
@@ -324,12 +399,23 @@ export const AdminCertificates: React.FC<AdminCertificatesProps> = ({
                   <Calendar className="text-emerald-400" />
                 </div>
              </div>
-            <button
-              onClick={() => setIsIssueModalOpen(true)}
-              className="px-5 py-3 h-full bg-white hover:bg-slate-200 text-black text-sm font-semibold rounded-lg transition-all flex items-center gap-2 shadow-sm"
-            >
-              <Plus size={16} /> Issue Auto-Cert
-            </button>
+            <div className="flex items-center gap-3">
+              {certificates.length > 0 && (
+                <button
+                  onClick={handleDownloadRegistry}
+                  className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm font-semibold rounded-lg transition-all flex items-center gap-2 shadow-sm"
+                  title="Download Certificates Registry as CSV"
+                >
+                  <Download size={16} /> Download Registry
+                </button>
+              )}
+              <button
+                onClick={() => setIsIssueModalOpen(true)}
+                className="px-5 py-3 bg-white hover:bg-slate-200 text-black text-sm font-semibold rounded-lg transition-all flex items-center gap-2 shadow-sm"
+              >
+                <Plus size={16} /> Issue Auto-Cert
+              </button>
+            </div>
           </div>
 
           <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-3 flex items-center gap-3 shadow-sm">
@@ -389,9 +475,20 @@ export const AdminCertificates: React.FC<AdminCertificatesProps> = ({
           <div className="space-y-4">
              <div className="flex items-center justify-between mb-2">
                 <h4 className="text-lg font-semibold text-white">Portal Logins</h4>
-                <button onClick={() => setIsCredModalOpen(true)} className="px-3 py-1.5 bg-[#0f172a] border border-slate-700 hover:border-slate-500 rounded-md text-xs font-medium text-slate-200 transition-colors flex items-center gap-1.5 shadow-sm">
-                  <Key size={14} /> New Credential
-                </button>
+                <div className="flex items-center gap-2">
+                  {studentUsers.length > 0 && (
+                    <button
+                      onClick={handleDownloadCredentials}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm"
+                      title="Download Student Portal Logins as CSV"
+                    >
+                      <Download size={14} /> Download
+                    </button>
+                  )}
+                  <button onClick={() => setIsCredModalOpen(true)} className="px-3 py-1.5 bg-[#0f172a] border border-slate-700 hover:border-slate-500 rounded-md text-xs font-medium text-slate-200 transition-colors flex items-center gap-1.5 shadow-sm">
+                    <Key size={14} /> New Credential
+                  </button>
+                </div>
              </div>
              <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-4 shadow-sm">
                 <input
@@ -511,7 +608,12 @@ export const AdminCertificates: React.FC<AdminCertificatesProps> = ({
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Password</label>
-                      <input required type="password" value={credFormData.password} onChange={e=>setCredFormData({...credFormData, password:e.target.value})} className="bg-[#0a0a0a] border border-slate-700 rounded-md px-3.5 py-2.5 text-sm text-slate-200 w-full focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-600" placeholder="••••••••" />
+                      <div className="relative">
+                        <input required type={showCredPassword ? "text" : "password"} value={credFormData.password} onChange={e=>setCredFormData({...credFormData, password:e.target.value})} className="bg-[#0a0a0a] border border-slate-700 rounded-md pl-3.5 pr-10 py-2.5 text-sm text-slate-200 w-full focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-600" placeholder="••••••••" />
+                        <button type="button" onClick={() => setShowCredPassword(!showCredPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                          {showCredPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div>

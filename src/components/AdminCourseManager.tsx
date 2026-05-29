@@ -10,7 +10,7 @@ import {
 import { 
   BookOpen, Plus, Save, X, Users, BookMarked, Trash2, Video, 
   ClipboardList, HelpCircle, CheckCircle2, AlertCircle, Clock, 
-  KeyRound, Calendar, Edit2, PlayCircle, PlusCircle, ArrowRight 
+  KeyRound, Calendar, Edit2, PlayCircle, PlusCircle, ArrowRight, Download 
 } from 'lucide-react';
 
 interface AdminCourseManagerProps {
@@ -20,6 +20,48 @@ interface AdminCourseManagerProps {
 export const AdminCourseManager: React.FC<AdminCourseManagerProps> = ({ courses }) => {
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [subTab, setSubTab] = useState<'curriculum' | 'sections' | 'recordings' | 'mocktests' | 'attendance'>('curriculum');
+
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadCurriculum = () => {
+    const course = courses.find(c => c.id === selectedCourseId);
+    const courseTitle = course ? course.title : 'course';
+    const data = curriculum.days.map(d => ({
+      Day: d.dayNumber,
+      Date: d.date || 'N/A',
+      Concept: d.concept,
+      Material: d.material,
+      Assignment: d.assignment
+    }));
+    exportToCSV(data, `${courseTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_curriculum.csv`, ['Day', 'Scheduled Date', 'Concept', 'Learning Material', 'Assignment']);
+  };
 
   // Curriculum builder state
   const [curriculum, setCurriculum] = useState<CourseCurriculum>({
@@ -562,13 +604,21 @@ export const AdminCourseManager: React.FC<AdminCourseManagerProps> = ({ courses 
                     <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                       <BookOpen className="w-5 h-5 text-indigo-400" /> Advanced Curriculum Builder
                     </h4>
-                    <button
-                      onClick={handleSaveCurriculum}
-                      disabled={saving}
-                      className="px-5 py-2.5 bg-white text-black font-semibold rounded-md text-sm flex items-center gap-2 hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-50"
-                    >
-                      <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Curriculum'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDownloadCurriculum}
+                        className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-md text-sm flex items-center gap-2 transition-colors shadow-sm"
+                      >
+                        <Download className="w-4 h-4" /> Download Curriculum
+                      </button>
+                      <button
+                        onClick={handleSaveCurriculum}
+                        disabled={saving}
+                        className="px-5 py-2.5 bg-white text-black font-semibold rounded-md text-sm flex items-center gap-2 hover:bg-slate-200 transition-colors shadow-sm disabled:opacity-50"
+                      >
+                        <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Curriculum'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Daily Schedule */}

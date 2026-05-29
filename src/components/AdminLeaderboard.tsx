@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, X, Search, Trophy, Medal, Award, User, Target, Zap } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Trophy, Medal, Award, User, Target, Zap, Download } from 'lucide-react';
 import { getLeaderboard, addLeaderboardEntry, updateLeaderboardEntry, deleteLeaderboardEntry, LeaderboardEntry } from '../lib/turso';
 
 export const AdminLeaderboard = () => {
@@ -8,6 +8,47 @@ export const AdminLeaderboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadLeaderboard = () => {
+    const data = entries.map(e => ({
+      Rank: e.rank || 'N/A',
+      StudentID: e.studentId || 'N/A',
+      StudentName: e.studentName,
+      XPPoints: e.points,
+      ProblemsSolved: e.problemsSolved,
+      Badges: e.badges
+    }));
+    exportToCSV(data, 'leaderboard_report.csv', ['Rank', 'Student ID', 'Student Name', 'XP Points', 'Problems Solved', 'Badges']);
+  };
 
   // Form states
   const [studentName, setStudentName] = useState('');
@@ -111,16 +152,28 @@ export const AdminLeaderboard = () => {
           </h2>
           <p className="text-secondary/60 font-medium">Manage student rankings, XP points, and badges for the global leaderboard.</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setIsAdding(true);
-          }}
-          className="px-4 py-2 bg-[#41c8df] text-black font-bold rounded-xl flex items-center gap-2 hover:bg-[#38b2c7] transition-colors shadow-lg shadow-[#41c8df]/20"
-        >
-          <Plus size={20} />
-          Add Entry
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {entries.length > 0 && (
+            <button
+              onClick={handleDownloadLeaderboard}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-xl flex items-center gap-2 hover:bg-secondary/5 transition-colors shadow-lg"
+              title="Download Leaderboard as CSV"
+            >
+              <Download size={20} />
+              Download Report
+            </button>
+          )}
+          <button
+            onClick={() => {
+              resetForm();
+              setIsAdding(true);
+            }}
+            className="px-4 py-2 bg-[#41c8df] text-black font-bold rounded-xl flex items-center gap-2 hover:bg-[#38b2c7] transition-colors shadow-lg shadow-[#41c8df]/20"
+          >
+            <Plus size={20} />
+            Add Entry
+          </button>
+        </div>
       </div>
 
       {(isAdding || editingId) && (

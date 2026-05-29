@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, Phone, Mail, Shield, Save, CheckCircle2, User as UserIcon } from 'lucide-react';
+import { User, Phone, Mail, Shield, Save, CheckCircle2, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { getUsers, updateUser, User as DbUser } from '../lib/turso';
 
 interface StudentProfileProps {
@@ -13,6 +13,7 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ studentId }) => 
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -136,13 +137,22 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ studentId }) => 
               <label className="text-[10px] font-black text-secondary/40 uppercase tracking-widest flex items-center gap-2">
                 <Shield size={12} /> Update Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Leave blank to keep current"
-                className="w-full bg-secondary/5 border border-secondary/10 rounded-md px-4 py-3 focus:border-indigo-500 outline-none text-secondary font-medium transition-all"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Leave blank to keep current"
+                  className="w-full bg-secondary/5 border border-secondary/10 rounded-md pl-4 pr-10 py-3 focus:border-indigo-500 outline-none text-secondary font-medium transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
           </div>
 

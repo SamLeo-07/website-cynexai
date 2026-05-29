@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, EyeOff, Save, X, Search, HelpCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, EyeOff, Save, X, Search, HelpCircle, Download } from 'lucide-react';
 import { getFaqs, createFaq, updateFaq, deleteFaq, FAQItem } from '../lib/turso';
 
 export const AdminFAQ = () => {
@@ -8,6 +8,46 @@ export const AdminFAQ = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadFAQs = () => {
+    const data = faqs.map(f => ({
+      ID: f.id,
+      Question: f.question,
+      Answer: f.answer,
+      Visible: f.isVisible ? 'Yes' : 'No',
+      OrderIndex: f.order_index || 0
+    }));
+    exportToCSV(data, 'faqs_report.csv', ['FAQ ID', 'Question', 'Answer', 'Visible', 'Order Index']);
+  };
 
   // Form states
   const [question, setQuestion] = useState('');
@@ -119,14 +159,26 @@ export const AdminFAQ = () => {
           </h2>
           <p className="text-slate-500 text-sm mt-1">Add, edit, and organize frequently asked questions.</p>
         </div>
-        <button
-          onClick={handleAddNew}
-          disabled={isAdding || editingId !== null}
-          className="bg-[#41c8df] hover:bg-[#0891b2] text-black hover:text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
-        >
-          <Plus size={18} />
-          Add FAQ
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {faqs.length > 0 && (
+            <button
+              onClick={handleDownloadFAQs}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors"
+              title="Download FAQs as CSV"
+            >
+              <Download size={18} />
+              Download Report
+            </button>
+          )}
+          <button
+            onClick={handleAddNew}
+            disabled={isAdding || editingId !== null}
+            className="bg-[#41c8df] hover:bg-[#0891b2] text-black hover:text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+          >
+            <Plus size={18} />
+            Add FAQ
+          </button>
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-2">

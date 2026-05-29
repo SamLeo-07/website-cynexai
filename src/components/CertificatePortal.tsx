@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Award, Lock, LogIn, Key, Download, FileText, CheckCircle2 } from 'lucide-react';
+import { Award, Lock, LogIn, Key, Download, FileText, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { verifyCertificateLogin, getCertificatesByCredential, Certificate } from '../lib/turso';
 import Header from './Header';
 import Footer from './Footer';
@@ -8,6 +8,7 @@ import Footer from './Footer';
 export const CertificatePortal = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -146,13 +147,20 @@ export const CertificatePortal = () => {
                       <div className="relative">
                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input
-                          type="password"
+                          type={showPassword ? "text" : "password"}
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••"
-                          className="w-full bg-[#0a0a0a] border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-md py-2.5 pl-11 pr-4 text-slate-200 placeholder:text-slate-600 text-sm outline-none transition-all"
+                          className="w-full bg-[#0a0a0a] border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-md py-2.5 pl-11 pr-10 text-slate-200 placeholder:text-slate-600 text-sm outline-none transition-all"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
                       </div>
                     </div>
                   </div>

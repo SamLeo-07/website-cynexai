@@ -25,7 +25,8 @@ import {
   ShieldCheck,
   MessageSquare,
   Send,
-  Star
+  Star,
+  Download
 } from 'lucide-react';
 import {
   getPosts,
@@ -178,6 +179,7 @@ const AdminPanel = () => {
   });
   const [allocatedCourseId, setAllocatedCourseId] = useState('');
   const [allocatedBatchId, setAllocatedBatchId] = useState('');
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
 
   // Enrollment State
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
@@ -220,6 +222,123 @@ const AdminPanel = () => {
   const [diagLoading, setDiagLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download in this section");
+      return;
+    }
+    
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined 
+          ? '' 
+          : typeof val === 'object' 
+            ? JSON.stringify(val) 
+            : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadReport = () => {
+    switch (activeTab) {
+      case 'articles': {
+        const data = posts.map(p => ({
+          ID: p.id,
+          Title: p.title,
+          Category: p.category,
+          Date: p.date,
+          Visible: p.isVisible ? 'Yes' : 'No'
+        }));
+        exportToCSV(data, 'blog_articles_report.csv', ['ID', 'Title', 'Category', 'Date', 'Visible']);
+        break;
+      }
+      case 'courses': {
+        const data = courses.map(c => ({
+          ID: c.id,
+          Title: c.title,
+          Duration: c.duration,
+          Rating: c.rating,
+          Level: c.level,
+          Students: c.students,
+          Visible: c.isVisible ? 'Yes' : 'No'
+        }));
+        exportToCSV(data, 'courses_report.csv', ['ID', 'Title', 'Duration', 'Rating', 'Level', 'Students', 'Visible']);
+        break;
+      }
+      case 'students': {
+        const data = students.map(s => ({
+          ID: s.id,
+          Name: s.name,
+          Email: s.email,
+          Phone: s.phone || 'N/A',
+          BatchID: s.batch_id || 'None Allocated',
+          RegisteredDate: s.created_at || 'N/A'
+        }));
+        exportToCSV(data, 'students_report.csv', ['ID', 'Name', 'Email', 'Phone', 'Batch ID', 'Registered Date']);
+        break;
+      }
+      case 'payments': {
+        const data = payments.map(p => ({
+          ID: p.id,
+          StudentName: p.student_name,
+          TotalAmount: p.total_amount,
+          AmountPaid: p.amount_paid,
+          DueDate: p.due_date,
+          Status: p.status
+        }));
+        exportToCSV(data, 'payments_report.csv', ['Transaction ID', 'Student Name', 'Total Amount', 'Amount Paid', 'Due Date', 'Status']);
+        break;
+      }
+      case 'tickets': {
+        const data = tickets.map(t => ({
+          ID: t.id,
+          StudentName: t.student_name,
+          Category: t.category,
+          Description: t.description,
+          Status: t.status,
+          CreatedAt: t.created_at
+        }));
+        exportToCSV(data, 'support_tickets_report.csv', ['Ticket ID', 'Student Name', 'Category', 'Description', 'Status', 'Created At']);
+        break;
+      }
+      case 'reviews': {
+        const data = reviews.map(r => ({
+          ID: r.id,
+          Name: r.name,
+          Role: r.role,
+          Course: r.course,
+          Rating: r.rating,
+          StoryText: r.text,
+          Visible: r.isVisible ? 'Yes' : 'No'
+        }));
+        exportToCSV(data, 'graduate_success_stories.csv', ['ID', 'Graduate Name', 'Job Role', 'Course Completed', 'Rating', 'Story Description', 'Visible']);
+        break;
+      }
+      default:
+        alert("Download is handled directly in this section's workspace component");
+    }
+  };
 
   useEffect(() => {
     const authStatus = localStorage.getItem('cynexai_admin_auth');
@@ -1093,6 +1212,17 @@ const AdminPanel = () => {
               </p>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
+              {['articles', 'courses', 'students', 'payments', 'tickets', 'reviews'].includes(activeTab) && (
+                <button
+                  onClick={handleDownloadReport}
+                  className="inline-flex items-center px-4 py-2 sm:px-5 sm:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-md transition-all shadow-sm text-sm"
+                  title="Download Report as CSV"
+                >
+                  <Download className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Download Report</span>
+                  <span className="sm:hidden">Download</span>
+                </button>
+              )}
               {['articles', 'courses', 'students', 'payments', 'tickets', 'reviews'].includes(activeTab) && (
                 <button
                 onClick={() => {
@@ -2249,15 +2379,24 @@ const AdminPanel = () => {
                     <label htmlFor="student-password" className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                       Password {editingStudent ? '(Leave blank to keep unchanged)' : '*'}
                     </label>
-                    <input
-                      id="student-password"
-                      type="password"
-                      required={!editingStudent}
-                      value={studentFormData.password_hash}
-                      onChange={(e) => setStudentFormData({ ...studentFormData, password_hash: e.target.value })}
-                      className="w-full px-4 py-3 bg-secondary/5 border border-slate-800 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
-                      placeholder="Secure password"
-                    />
+                    <div className="relative">
+                      <input
+                        id="student-password"
+                        type={showStudentPassword ? "text" : "password"}
+                        required={!editingStudent}
+                        value={studentFormData.password_hash}
+                        onChange={(e) => setStudentFormData({ ...studentFormData, password_hash: e.target.value })}
+                        className="w-full pl-4 pr-10 py-3 bg-secondary/5 border border-slate-800 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                        placeholder="Secure password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentPassword(!showStudentPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                      >
+                        {showStudentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="student-phone" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Phone Number</label>

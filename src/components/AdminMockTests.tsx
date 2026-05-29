@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, X, ClipboardList, AlertCircle, CheckCircle2,
-  Edit2, Trash2, Eye, EyeOff, HelpCircle, CheckSquare
+  Edit2, Trash2, Eye, EyeOff, HelpCircle, CheckSquare, Download
 } from 'lucide-react';
 import {
   getMockTests, createMockTest, deleteMockTest,
@@ -153,6 +153,84 @@ const AdminMockTests = () => {
 
   const filteredResults = results.filter(r => r.testId === selectedTestId);
 
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadTests = () => {
+    const data = tests.map(t => {
+      const course = courses.find(c => c.id === t.course_id);
+      const batch = batches.find(b => b.id === t.batch_id);
+      return {
+        ID: t.id,
+        Title: t.title,
+        Description: t.description,
+        DurationMinutes: t.duration,
+        Category: t.category,
+        TotalQuestions: t.totalQuestions,
+        IsActive: t.isActive ? 'Yes' : 'No',
+        Course: course ? course.title : 'General',
+        Batch: batch ? batch.name : 'All Batches'
+      };
+    });
+    exportToCSV(data, 'mock_tests_list.csv', ['Test ID', 'Title', 'Description', 'Duration (Min)', 'Category', 'Total Questions', 'Active', 'Course', 'Batch/Section']);
+  };
+
+  const handleDownloadQuestions = () => {
+    const activeTest = tests.find(t => t.id === selectedTestId);
+    const testTitle = activeTest ? activeTest.title : 'mock_test';
+    const data = questions.map(q => ({
+      ID: q.id,
+      Text: q.text,
+      Type: q.type,
+      Difficulty: q.difficulty,
+      Options: q.options ? q.options.join(' | ') : 'N/A',
+      CorrectOptionIndex: q.correctAnswer !== undefined ? q.correctAnswer : 'N/A',
+      Explanation: q.explanation || 'N/A'
+    }));
+    exportToCSV(data, `${testTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_questions.csv`, ['Question ID', 'Question Text', 'Type', 'Difficulty', 'Options', 'Correct Option Index', 'Explanation']);
+  };
+
+  const handleDownloadResults = () => {
+    const activeTest = tests.find(t => t.id === selectedTestId);
+    const testTitle = activeTest ? activeTest.title : 'mock_test';
+    const data = filteredResults.map(r => ({
+      ID: r.id,
+      StudentID: r.studentId,
+      StudentName: r.studentName,
+      Score: r.score,
+      TotalQuestions: r.totalQuestions,
+      Percentage: r.percentage + '%',
+      CompletedDate: r.date
+    }));
+    exportToCSV(data, `${testTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_results.csv`, ['Attempt ID', 'Student ID', 'Student Name', 'Score', 'Total Questions', 'Percentage', 'Completed Date']);
+  };
+
   return (
     <div>
       <AnimatePresence>
@@ -199,7 +277,18 @@ const AdminMockTests = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Tests List */}
         <div className="lg:col-span-1 space-y-3">
-          <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">All Tests ({tests.length})</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">All Tests ({tests.length})</h3>
+            {tests.length > 0 && (
+              <button
+                onClick={handleDownloadTests}
+                className="inline-flex items-center text-[10px] font-bold text-[#41c8df] hover:underline"
+                title="Download all mock tests as CSV"
+              >
+                <Download className="w-3 h-3 mr-1" /> Download
+              </button>
+            )}
+          </div>
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="w-6 h-6 border-3 border-gray-200 border-t-[#41c8df] rounded-full animate-spin" />
@@ -249,9 +338,20 @@ const AdminMockTests = () => {
         <div className="lg:col-span-2 space-y-6">
           {/* Questions */}
           <div>
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
-              Questions ({questions.length})
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">
+                Questions ({questions.length})
+              </h3>
+              {questions.length > 0 && (
+                <button
+                  onClick={handleDownloadQuestions}
+                  className="inline-flex items-center text-[10px] font-bold text-[#41c8df] hover:underline"
+                  title="Download question bank for this test as CSV"
+                >
+                  <Download className="w-3 h-3 mr-1" /> Download
+                </button>
+              )}
+            </div>
             <div className="bg-background/40 backdrop-blur-xl border border-secondary/10 rounded-2xl overflow-hidden shadow-lg">
               {!selectedTestId ? (
                 <div className="text-center py-12 text-gray-400 text-sm">Select a test to view questions</div>
@@ -301,9 +401,20 @@ const AdminMockTests = () => {
 
           {/* Results */}
           <div>
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
-              Test Results ({filteredResults.length})
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">
+                Test Results ({filteredResults.length})
+              </h3>
+              {filteredResults.length > 0 && (
+                <button
+                  onClick={handleDownloadResults}
+                  className="inline-flex items-center text-[10px] font-bold text-[#41c8df] hover:underline"
+                  title="Download test results as CSV"
+                >
+                  <Download className="w-3 h-3 mr-1" /> Download
+                </button>
+              )}
+            </div>
             <div className="bg-background/40 backdrop-blur-xl border border-secondary/10 rounded-2xl overflow-hidden shadow-lg">
               {filteredResults.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 text-sm">No results for this test yet</div>

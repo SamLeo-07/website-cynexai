@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Code, Plus, Edit2, Trash2, X, Trash, Play, AlertCircle, Layers, CheckCircle 
+  Code, Plus, Edit2, Trash2, X, Trash, Play, AlertCircle, Layers, CheckCircle, Terminal, Download
 } from 'lucide-react';
 import { 
   getCodingProblems, 
   createCodingProblem, 
   updateCodingProblem, 
   deleteCodingProblem, 
-  CodingProblem 
+  CodingProblem,
+  getAllCodeSubmissions,
+  CodeSubmission
 } from '../lib/turso';
 
 interface AdminCodingProblemsProps {
@@ -19,6 +21,7 @@ export const AdminCodingProblems: React.FC<AdminCodingProblemsProps> = ({
   courses
 }) => {
   const [problems, setProblems] = useState<CodingProblem[]>([]);
+  const [submissions, setSubmissions] = useState<CodeSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProblem, setEditingProblem] = useState<CodingProblem | null>(null);
@@ -47,11 +50,73 @@ export const AdminCodingProblems: React.FC<AdminCodingProblemsProps> = ({
 
   const [submitting, setSubmitting] = useState(false);
 
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadProblems = () => {
+    const data = problems.map(p => ({
+      ID: p.id,
+      Title: p.title,
+      Course: getCourseTitle(p.course_id),
+      Difficulty: p.difficulty,
+      Description: p.description,
+      Constraints: p.constraints || 'N/A'
+    }));
+    exportToCSV(data, 'coding_challenges.csv', ['Challenge ID', 'Title', 'Course', 'Difficulty', 'Description', 'Constraints']);
+  };
+
+  const handleDownloadSubmissions = () => {
+    const data = submissions.map(s => {
+      const problem = problems.find(p => p.id === s.problem_id);
+      return {
+        ID: s.id,
+        StudentID: s.student_id,
+        Challenge: problem ? problem.title : s.problem_id,
+        Language: s.language,
+        Status: s.status,
+        Runtime: s.runtime_ms + 'ms',
+        SubmittedAt: s.submitted_at,
+        Code: s.code
+      };
+    });
+    exportToCSV(data, 'student_code_submissions_report.csv', ['Submission ID', 'Student ID', 'Challenge Name', 'Language', 'Status', 'Runtime', 'Submitted At', 'Source Code']);
+  };
+
   const fetchProblems = async () => {
     setLoading(true);
     try {
-      const p = await getCodingProblems();
+      const [p, s] = await Promise.all([
+        getCodingProblems(),
+        getAllCodeSubmissions()
+      ]);
       setProblems(p);
+      setSubmissions(s);
     } catch (e) {
       console.error(e);
     } finally {
@@ -203,17 +268,37 @@ export const AdminCodingProblems: React.FC<AdminCodingProblemsProps> = ({
     <div className="space-y-8 text-white">
       
       {/* Header */}
-      <div className="flex justify-between items-center bg-gray-900 border border-gray-800 rounded-2xl p-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-900 border border-gray-800 rounded-2xl p-6 gap-4">
         <div>
           <h3 className="text-3xl font-bold tracking-tight text-white">Daily Practice (LeetCode Style)</h3>
           <p className="text-sm font-medium text-gray-400 mt-1">Manage algorithmic problems for students to practice daily.</p>
         </div>
-        <button
-          onClick={handleOpenAddModal}
-          className="w-full sm:w-auto px-6 py-3 bg-[#41c8df] hover:bg-[#2bb5cc] text-black font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#41c8df]/15 text-sm"
-        >
-          <Plus size={18} /> Add Daily Practice Problem
-        </button>
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {problems.length > 0 && (
+            <button
+              onClick={handleDownloadProblems}
+              className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+              title="Download Coding Challenges as CSV"
+            >
+              <Download size={16} /> Download Challenges
+            </button>
+          )}
+          {submissions.length > 0 && (
+            <button
+              onClick={handleDownloadSubmissions}
+              className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+              title="Download Student Submissions as CSV"
+            >
+              <Download size={16} /> Download Submissions
+            </button>
+          )}
+          <button
+            onClick={handleOpenAddModal}
+            className="px-5 py-3 bg-[#41c8df] hover:bg-[#2bb5cc] text-black font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#41c8df]/15 text-sm"
+          >
+            <Plus size={18} /> Add Daily Practice Problem
+          </button>
+        </div>
       </div>
 
       {/* Stats row */}

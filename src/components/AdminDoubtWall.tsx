@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MessageSquare, CheckCircle, HelpCircle, ArrowUp, Code, X, Send, 
-  Trash2, User, Calendar, BookOpen, Layers, Check 
+  Trash2, User, Calendar, BookOpen, Layers, Check, Download 
 } from 'lucide-react';
 import { 
   getDoubtQuestions, 
@@ -35,6 +35,49 @@ export const AdminDoubtWall: React.FC<AdminDoubtWallProps> = ({
   const [answerCode, setAnswerCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
+
+  const exportToCSV = (data: any[], filename: string, headers?: string[]) => {
+    if (!data || !data.length) {
+      alert("No data available to download");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const displayHeaders = headers || keys;
+    const csvRows = [];
+    csvRows.push(displayHeaders.map(header => `"${String(header).replace(/"/g, '""')}"`).join(','));
+    for (const row of data) {
+      const values = keys.map(key => {
+        const val = row[key];
+        const strVal = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadDoubts = () => {
+    const data = questions.map(q => ({
+      ID: q.id,
+      Title: q.title,
+      Course: getCourseTitle(q.course_id),
+      StudentName: q.student_name,
+      Description: q.body,
+      Resolved: q.is_resolved ? 'Yes' : 'No',
+      Upvotes: q.upvotes || 0,
+      Date: q.created_at
+    }));
+    exportToCSV(data, 'doubt_questions_report.csv', ['Doubt ID', 'Title', 'Course', 'Student Name', 'Description', 'Resolved', 'Upvotes', 'Created At']);
+  };
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -190,9 +233,20 @@ export const AdminDoubtWall: React.FC<AdminDoubtWallProps> = ({
   return (
     <div className="space-y-8 text-white">
       {/* Header */}
-      <div>
-        <h3 className="text-3xl font-bold tracking-tight text-white">Doubt wall Resolution</h3>
-        <p className="text-sm text-gray-400 font-medium">Review pending student tickets, post replies, and manage discussions.</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-3xl font-bold tracking-tight text-white">Doubt wall Resolution</h3>
+          <p className="text-sm text-gray-400 font-medium">Review pending student tickets, post replies, and manage discussions.</p>
+        </div>
+        {questions.length > 0 && (
+          <button
+            onClick={handleDownloadDoubts}
+            className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-md"
+            title="Download Doubts as CSV"
+          >
+            <Download size={18} /> Download doubts
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
