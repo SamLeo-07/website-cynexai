@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run build:vite && npm run build:next && npm run copy:next",
+    "build:vite": "vite build",
+    "build:next": "cd attendance-frontend && npm install && npm run build",
+    "copy:next": "mkdir -p dist/attendance && cp -r attendance-frontend/out/* dist/attendance/",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -71,7 +71,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start listening
-app.listen(PORT, () => {
-  console.log(`[Server] Attendance backend running on port ${PORT}`);
-});
+// Start listening only if not running in a serverless environment (e.g. Netlify)
+if (process.env.NODE_ENV !== "production" || process.env.RENDER) {
+  app.listen(PORT, () => {
+    console.log(`[Server] Attendance backend running on port ${PORT}`);
+  });
+}
+
+// Export the app for serverless
+export default app;

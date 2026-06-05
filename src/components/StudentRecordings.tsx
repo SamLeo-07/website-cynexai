@@ -144,7 +144,7 @@ export const StudentRecordings: React.FC<StudentRecordingsProps> = ({ enrollment
         throw new Error("Gemini API key not configured");
       }
       
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
       const token = localStorage.getItem('cynexai_token') || localStorage.getItem('token') || '';
       
       const response = await fetch(`${apiUrl}/api/recordings/analyze-video`, {

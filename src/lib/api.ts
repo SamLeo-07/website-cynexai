@@ -51,7 +51,7 @@ import * as turso from './turso';
 
 // ─── Core Fetch Utility ───────────────────────────────────────────────────────
 
-const BACKEND_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
+const BACKEND_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '/api';
 
 /**
  * Returns true if a backend API URL is configured.
