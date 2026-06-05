@@ -1,0 +1,22 @@
+/* ── AboutUs.tsx extracted styles ───────────────────────────────────────── */
+
+/* Root wrapper: 3D perspective context for the whole page */
+.about-root {
+    perspective: 1200px;
+}
+
+/* Icon bubbles in Mission / Vision cards: pop forward in 3D */
+.about-icon-z {
+    transform: translateZ(15px);
+}
+
+/* Icon bubbles in "Why Choose" feature cards */
+.about-icon-z-sm {
+    transform: translateZ(12px);
+}
+
+/* Team member cards: 3D card flip effect */
+.about-team-card {
+    transform-style: preserve-3d;
+    perspective: 800px;
+}

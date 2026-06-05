@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: cynexai-attendance-backend
+    runtime: node
+    rootDir: attendance-backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      # ⬇️ Set these in the Render.com dashboard → Environment
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+    healthCheckPath: /
