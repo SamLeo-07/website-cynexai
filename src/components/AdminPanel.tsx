@@ -2180,6 +2180,7 @@ const AdminPanel = () => {
                     ))
                   )}
                 </tbody>
+              </table>
             ) : activeTab === 'tickets' ? (
               <table className="w-full text-left">
                 <thead className="bg-secondary/5 border-b border-slate-800">
