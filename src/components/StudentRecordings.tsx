@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PlayCircle, Clock, Calendar, CheckCircle2, X, AlertCircle, HelpCircle, Video, ExternalLink, Sparkles, Terminal, FileText, Send, Loader2, Trophy } from 'lucide-react';
-import { Course, Enrollment, getDailyRecordingsByBatch, getDailyRecordings, DailyRecording, markAutomaticAttendance, getBatches, Batch } from '../lib/turso';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { PlayCircle, Clock, Calendar, CheckCircle2, X, Video, ExternalLink, Sparkles, Terminal, Loader2, Trophy } from 'lucide-react';
+import { Course, Enrollment, getDailyRecordingsByBatch, getDailyRecordings, DailyRecording, markAutomaticAttendance, getBatches, Batch, Badge } from '../lib/turso';
+
 
 interface StudentRecordingsProps {
   enrollments: { enrollment: Enrollment; course: Course }[];
@@ -40,7 +40,7 @@ export const StudentRecordings: React.FC<StudentRecordingsProps> = ({ enrollment
 
   // New Gamification & Automation States
   const [isFocusMode, setIsFocusMode] = useState(false);
-  const [watchTime, setWatchTime] = useState(0);
+  const [, setWatchTime] = useState(0);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'chapters' | 'ainotes' | 'sandbox'>('chapters');
   
@@ -309,19 +309,23 @@ export const StudentRecordings: React.FC<StudentRecordingsProps> = ({ enrollment
     let badgeTitle = '';
     let badgeIcon = '';
     let badgeDesc = '';
+    let badgeColor = '';
 
     if (subject === 'sql') {
       badgeTitle = 'SQL Sorcerer';
       badgeIcon = 'Star';
       badgeDesc = 'Mastered SQL relational database queries and JOIN operators.';
+      badgeColor = 'text-amber-500';
     } else if (subject === 'ml' || subject === 'machine learning') {
       badgeTitle = 'ML Champion';
       badgeIcon = 'Award';
       badgeDesc = 'Solved supervised learning algorithms and MSE calculation.';
+      badgeColor = 'text-indigo-500';
     } else {
       badgeTitle = 'Python Pioneer';
       badgeIcon = 'Rocket';
       badgeDesc = 'Mastered fundamental Python structures and list comprehensions.';
+      badgeColor = 'text-emerald-500';
     }
 
     // Check if already unlocked
@@ -332,6 +336,7 @@ export const StudentRecordings: React.FC<StudentRecordingsProps> = ({ enrollment
         student_id: studentId || 'demo_student',
         title: badgeTitle,
         icon: badgeIcon,
+        color: badgeColor,
         description: badgeDesc,
         unlocked_at: new Date().toISOString()
       };

@@ -271,7 +271,7 @@ export const getPosts = async (
       return await api.get(`/api/posts?${params}`);
     } catch { /* fall through */ }
   }
-  return turso.getPosts(page, pageSize, search, category, includeHidden);
+  return turso.getPosts({ page, limit: pageSize, search, category, includeHidden });
 };
 
 export const createPost = async (post: turso.Post): Promise<void> => {
@@ -344,7 +344,7 @@ export const getQuestions = async (testId: string, includeUnapproved = false): P
 
 export const addQuestion = async (question: turso.Question): Promise<void> => {
   if (BACKEND_URL) {
-    try { await api.post(`/api/mock-tests/${question.test_id}/questions`, question); return; } catch { /* fall through */ }
+    try { await api.post(`/api/mock-tests/${question.testId}/questions`, question); return; } catch { /* fall through */ }
   }
   return turso.addQuestion(question);
 };
@@ -511,11 +511,11 @@ export const getAllAttendanceStats = async (): Promise<unknown[]> => {
 
 export const markAutomaticAttendance = async (
   studentId: string, studentName: string, recordingId: string
-): Promise<void> => {
+): Promise<boolean> => {
   if (BACKEND_URL) {
     try {
       await api.post('/api/attendance/records', { studentId, studentName, recordingId, auto: true });
-      return;
+      return true;
     } catch { /* fall through */ }
   }
   return turso.markAutomaticAttendance(studentId, studentName, recordingId);
@@ -571,7 +571,11 @@ export const verifyCertificateLogin = async (
   if (BACKEND_URL) {
     try { return await api.post('/api/certificate-credentials/verify', { username, password }); } catch { /* fall through */ }
   }
-  return turso.verifyCertificateLogin(username, password);
+  const cred = await turso.verifyCertificateLogin(username, password);
+  return {
+    valid: !!cred,
+    credentialId: cred?.id
+  };
 };
 
 // ─── DOUBTS ───────────────────────────────────────────────────────────────────

@@ -242,7 +242,7 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const createUser = async (user: Omit<User, 'created_at'>) => {
-  const newUser = { ...user, created_at: user.created_at || new Date().toISOString() };
+  const newUser = { ...user, created_at: new Date().toISOString() };
   if (isTursoConfigured && client) {
     try {
       await client.execute({
@@ -554,7 +554,7 @@ export const getStudentChecklist = async (studentId: string): Promise<Onboarding
         sql: "SELECT * FROM onboarding_steps WHERE student_id = ?",
         args: [studentId]
       });
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         ...row,
         is_done: row.is_done === 1
       })) as unknown as OnboardingStep[];
@@ -610,7 +610,7 @@ export const getPaymentsByStudent = async (studentId: string): Promise<Payment[]
         sql: "SELECT * FROM payments WHERE student_id = ? AND (isVisible = 1 OR isVisible IS NULL)",
         args: [studentId]
       });
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         ...row,
         isVisible: (row as any).isVisible === undefined ? true : (row as any).isVisible === 1
       })) as unknown as Payment[];
@@ -626,7 +626,7 @@ export const getAllPayments = async (): Promise<Payment[]> => {
   if (isTursoConfigured && client) {
     try {
       const result = await client.execute("SELECT * FROM payments");
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         ...row,
         isVisible: (row as any).isVisible === 1 || (row as any).isVisible === undefined || (row as any).isVisible === null
       })) as unknown as Payment[];
@@ -1076,6 +1076,7 @@ export interface ProjectSubmission {
   id: string;
   project_id: string;
   student_id: string;
+  studentName?: string;
   custom_title?: string;
   custom_description?: string;
   submission_url?: string;
@@ -1102,6 +1103,7 @@ export interface Badge {
   title: string;
   icon: string;
   color: string;
+  description?: string;
   unlocked_at: string;
 }
 
@@ -1167,7 +1169,11 @@ export const getAllPostsLocal = (): Post[] => {
         date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         image: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800"
       },
-      ...advancedAiPosts
+      ...advancedAiPosts.map(post => ({
+        ...post,
+        id: generateSlug(post.title),
+        date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      }))
     ];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(samplePosts));
     return samplePosts;
@@ -1458,7 +1464,7 @@ export const getMockTests = async (): Promise<MockTest[]> => {
     try {
       await initTursoDB();
       const result = await client.execute("SELECT * FROM mock_tests ORDER BY createdAt DESC");
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         title: row.title as string,
         description: row.description as string,
@@ -1503,7 +1509,7 @@ export const getQuestions = async (testId: string, includeUnapproved: boolean = 
       }
 
       const result = await client.execute({ sql, args });
-      return result.rows.map((row) => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         testId: row.testId as string,
         text: row.text as string,
@@ -1880,7 +1886,7 @@ export const getTestResults = async (): Promise<TestResult[]> => {
     try {
       await initTursoDB();
       const result = await client.execute("SELECT * FROM test_results ORDER BY date DESC");
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         studentName: row.studentName as string,
         testId: row.testId as string,
@@ -2020,7 +2026,7 @@ export const autoProvisionContent = async () => {
     const allProblems = await getCodingProblems();
     
     // 1. Auto Provision Daily Coding Problem
-    const hasProblemToday = allProblems.some(p => p.createdAt.startsWith(todayStr));
+    const hasProblemToday = allProblems.some(p => p.created_at.startsWith(todayStr));
     
     if (!hasProblemToday) {
       const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
@@ -2030,7 +2036,8 @@ export const autoProvisionContent = async () => {
       const newProblem: CodingProblem = {
         ...questionToAdd,
         id: `auto_daily_${todayStr}_${questionToAdd.id}`,
-        createdAt: new Date().toISOString()
+        course_id: 'data-science-machine-learning',
+        created_at: new Date().toISOString()
       };
       
       await createCodingProblem(newProblem);
@@ -2048,16 +2055,20 @@ export const autoProvisionContent = async () => {
         ...mockTestTemplate,
         id: `auto_mock_${currentWeek}`,
         title: `Weekly Automated Mock Test (Week ${currentWeek % 52})`,
+        isActive: Boolean(mockTestTemplate.isActive),
         createdAt: new Date().toISOString()
       };
       
       await createMockTest(newMockTest);
       
       for (const mq of mockTestQuestionsBank) {
-        await createQuestion({
+        await addQuestion({
           ...mq,
           id: `auto_mq_${currentWeek}_${mq.id}`,
-          testId: newMockTest.id
+          testId: newMockTest.id,
+          isApproved: true,
+          difficulty: mq.difficulty as 'easy' | 'medium' | 'hard',
+          type: mq.type as 'mcq' | 'coding' | 'short-answer' | 'true-false'
         });
       }
       console.log(`Auto-provisioned weekly mock test: ${newMockTest.title}`);
@@ -2495,7 +2506,7 @@ export const getAnnouncements = async (): Promise<Announcement[]> => {
   if (isTursoConfigured && client) {
     try {
       const result = await client.execute("SELECT * FROM announcements ORDER BY created_at DESC");
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         ...row,
         isActive: (row as any).isActive === 1
       })) as unknown as Announcement[];
@@ -2976,7 +2987,7 @@ export const getEnrollmentStatsByCourse = async (): Promise<{ course_id: string;
         GROUP BY e.course_id
         ORDER BY count DESC
       `);
-      return result.rows.map(r => ({
+      return result.rows.map((r: any) => ({
         course_id: r.course_id as string,
         course_title: (r.course_title as string) || r.course_id as string,
         count: Number(r.count)
@@ -2996,7 +3007,7 @@ export const getRevenueOverTime = async (): Promise<{ month: string; revenue: nu
         FROM payments WHERE status='paid'
         GROUP BY month ORDER BY month ASC
       `);
-      return result.rows.map(r => ({
+      return result.rows.map((r: any) => ({
         month: r.month as string,
         revenue: Number(r.revenue)
       }));
@@ -3755,7 +3766,7 @@ export const getPosts = async (options: GetPostsOptions = {}) => {
       // Note: In a production app with thousands of posts, this needs a better strategy (e.g. cursor-based or complex merging)
       // For this scale, fetching all headers is fine.
       const result = await client.execute({ sql: query, args });
-      const tursoPosts = result.rows.map(row => ({
+      const tursoPosts = result.rows.map((row: any) => ({
         ...row,
         isVisible: row.isVisible === 1
       })) as unknown as Post[];
@@ -3971,7 +3982,7 @@ export const getCategories = async () => {
   if (isTursoConfigured && client && !dbConnectionFailed) {
     try {
       const result = await client.execute("SELECT DISTINCT category FROM blog_posts WHERE isVisible = 1");
-      const tursoCategories = new Set(result.rows.map(row => row.category as string).filter(Boolean));
+      const tursoCategories = new Set(result.rows.map((row: any) => row.category as string).filter(Boolean));
 
       // Merge with local categories
       const localPosts = getAllPostsLocal();
@@ -4186,7 +4197,7 @@ export const testConnection = async () => {
 
     // Check tables
     const tables = await client.execute("SELECT name FROM sqlite_master WHERE type='table'");
-    const tableNames = tables.rows.map(r => String(r.name));
+    const tableNames = tables.rows.map((r: any) => String(r.name));
 
     const diagnostics: { success: boolean; latency: string; tables: string[]; counts: Record<string, number> } = {
       success: true,
@@ -4234,7 +4245,7 @@ export const syncSampleCourses = async () => {
       }
 
       console.log("Deepmind: Syncing sample courses with full detail data...");
-      const sampleCourses = [
+      const sampleCourses: any[] = [
         {
           id: 'data-science-machine-learning',
           title: 'Data Science & Machine Learning',
@@ -4397,7 +4408,7 @@ export const getCourses = async (includeHidden: boolean = false): Promise<Course
         : "SELECT * FROM courses WHERE isVisible = 1 ORDER BY title ASC";
       
       const result = await client.execute(query);
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         title: row.title as string,
         subtitle: (row.subtitle as string) || '',
@@ -5029,7 +5040,7 @@ export const getReviews = async (includeHidden = false): Promise<Review[]> => {
       }
       query += " ORDER BY created_at DESC";
       const result = await client.execute(query);
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         name: row.name as string,
         role: row.role as string,
@@ -5198,7 +5209,7 @@ export const updateReview = async (review: Review) => {
   try {
     const localReviewsStr = localStorage.getItem('cynexai_local_testimonials') || '[]';
     let localReviews = JSON.parse(localReviewsStr) as Review[];
-    localReviews = localReviews.map(r => r.id === review.id ? { ...r, ...review } : r);
+    localReviews = localReviews.map((r: any) => r.id === review.id ? { ...r, ...review } : r);
     localStorage.setItem('cynexai_local_testimonials', JSON.stringify(localReviews));
   } catch (e) {
     console.error("Failed to update local review", e);
@@ -5250,7 +5261,7 @@ export const toggleReviewVisibility = async (id: string, isVisible: boolean) => 
   try {
     const localReviewsStr = localStorage.getItem('cynexai_local_testimonials') || '[]';
     let localReviews = JSON.parse(localReviewsStr) as Review[];
-    localReviews = localReviews.map(r => r.id === id ? { ...r, isVisible } : r);
+    localReviews = localReviews.map((r: any) => r.id === id ? { ...r, isVisible } : r);
     localStorage.setItem('cynexai_local_testimonials', JSON.stringify(localReviews));
   } catch (e) {
     console.error("Failed to toggle local review visibility", e);
@@ -5442,7 +5453,7 @@ export const getAllAttendanceStats = async (): Promise<{ student_id: string; stu
         LEFT JOIN attendance_records ar ON ar.session_id = s.id
         GROUP BY ar.student_id, s.course_id
       `);
-      return result.rows.map(r => ({
+      return result.rows.map((r: any) => ({
         student_id: r.student_id as string,
         student_name: r.student_name as string,
         course_id: r.course_id as string,
@@ -5773,7 +5784,7 @@ export const getDoubtQuestions = async (courseId?: string): Promise<DoubtQuestio
         : `SELECT * FROM doubt_questions ORDER BY created_at DESC`;
       const args = courseId ? [courseId] : [];
       const result = await client.execute({ sql, args });
-      return result.rows.map(r => ({ ...r, upvotes: Number(r.upvotes), is_resolved: Number(r.is_resolved) })) as unknown as DoubtQuestion[];
+      return result.rows.map((r: any) => ({ ...r, upvotes: Number(r.upvotes), is_resolved: Number(r.is_resolved) })) as unknown as DoubtQuestion[];
     } catch (e) { console.error('Failed to get doubt questions', e); }
   }
   const local = localStorage.getItem('cynexai_local_doubts');
@@ -5856,7 +5867,7 @@ export const getDoubtAnswers = async (questionId: string): Promise<DoubtAnswer[]
   if (isTursoConfigured && client && !dbConnectionFailed) {
     try {
       const result = await client.execute({ sql: `SELECT * FROM doubt_answers WHERE question_id = ? ORDER BY is_accepted DESC, upvotes DESC, created_at ASC`, args: [questionId] });
-      return result.rows.map(r => ({ ...r, upvotes: Number(r.upvotes), is_accepted: Number(r.is_accepted) })) as unknown as DoubtAnswer[];
+      return result.rows.map((r: any) => ({ ...r, upvotes: Number(r.upvotes), is_accepted: Number(r.is_accepted) })) as unknown as DoubtAnswer[];
     } catch (e) { console.error('Failed to get doubt answers', e); }
   }
   
@@ -6028,7 +6039,7 @@ export const getSolvedProblemIds = async (studentId: string): Promise<string[]> 
   if (isTursoConfigured && client && !dbConnectionFailed) {
     try {
       const result = await client.execute({ sql: `SELECT DISTINCT problem_id FROM code_submissions WHERE student_id = ? AND status = 'accepted'`, args: [studentId] });
-      return result.rows.map(r => r.problem_id as string);
+      return result.rows.map((r: any) => r.problem_id as string);
     } catch (e) { console.error('Failed to get solved problems', e); }
   }
   return [];
@@ -6110,7 +6121,7 @@ export const getFaqs = async (includeHidden: boolean = false): Promise<FAQItem[]
       }
       sql += " ORDER BY order_index ASC, created_at DESC";
       const result = await client.execute(sql);
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         question: row.question as string,
         answer: row.answer as string,
@@ -6725,7 +6736,7 @@ export const getAttendanceCheckIns = async (sessionId: string): Promise<any[]> =
     const filtered = records.filter(r => r.session_id === sessionId);
     const localUsers = localStorage.getItem('cynexai_local_users') || '[]';
     const users = JSON.parse(localUsers);
-    return filtered.map(r => {
+    return filtered.map((r: any) => {
       const u = users.find((user: any) => user.id === r.student_id);
       return {
         ...r,
@@ -6862,7 +6873,7 @@ export const getStudentLessonProgressForCourse = async (
               WHERE p.student_id = ? AND l.course_id = ?`,
         args: [studentId, courseId]
       });
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         student_id: row.student_id as string,
         lesson_id: row.lesson_id as string,
@@ -6993,7 +7004,7 @@ export const getStudentNotes = async (studentId: string, lessonId: string): Prom
         sql: "SELECT * FROM student_notes WHERE student_id = ? AND lesson_id = ? ORDER BY timestamp ASC",
         args: [studentId, lessonId]
       });
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         id: row.id as string,
         student_id: row.student_id as string,
         lesson_id: row.lesson_id as string,
