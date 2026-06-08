@@ -7,8 +7,7 @@ import {
   Trophy, Star, Medal, Sparkles,
   TrendingUp, BookOpen, Flame,
   Award, Gem, BarChart3, AlertTriangle,
-  UserCheck, ShieldCheck, GraduationCap, Users, ChevronRight,
-  Upload, Camera, Phone, Lock, BadgeCheck, Video, MessageCircle
+  UserCheck, ShieldCheck, GraduationCap, Users, ChevronRight
 } from 'lucide-react';
 import { 
   Course, Enrollment, OnboardingStep, Badge,
@@ -47,14 +46,11 @@ const StudentDashboard = ({
   // Database State
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [dbProgress, setDbProgress] = useState<UserProgress | null>(null);
-  const [loadingDb, setLoadingDb] = useState(false);
-
   useEffect(() => {
     const fetchDbData = async () => {
       const activeStudentId = studentId || localStorage.getItem('cynexai_student_id') || '';
       if (!activeStudentId) return;
 
-      setLoadingDb(true);
       try {
         const [notifs, progress] = await Promise.all([
           getNotifications(activeStudentId),
@@ -64,8 +60,6 @@ const StudentDashboard = ({
         setDbProgress(progress);
       } catch (err) {
         console.error("Deepmind: Failed to load db data in dashboard", err);
-      } finally {
-        setLoadingDb(false);
       }
     };
 
@@ -116,7 +110,6 @@ const StudentDashboard = ({
 
   const activeCourses = enrollments.filter(e => e.enrollment.progress_percentage > 0 && e.enrollment.progress_percentage < 100);
   const completedCourses = enrollments.filter(e => e.enrollment.progress_percentage === 100);
-  const notStartedCourses = enrollments.filter(e => e.enrollment.progress_percentage === 0);
   
   // XP & Level calculation (mirrors Achievements.tsx logic, fallback to dynamic DB value)
   const { totalXp, level, xpProgress, nextLevelXp } = useMemo(() => {
@@ -252,7 +245,7 @@ const StudentDashboard = ({
     },
   ];
 
-  const handleStepAction = (step: typeof onboardingSteps[0]) => {
+  const handleStepAction = (step: any) => {
     if (step.navigateTo === 'courses') {
       onNavigate('courses');
     } else if (step.navigateTo === 'doubts') {
@@ -274,7 +267,7 @@ const StudentDashboard = ({
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } }
-  };
+  } as any;
 
   // Badge icon mapping
   const BadgeIcon = ({ iconName }: { iconName: string }) => {

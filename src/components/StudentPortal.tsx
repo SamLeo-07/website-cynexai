@@ -4,7 +4,7 @@ import {
   LogOut, BookOpen, Clock, PlayCircle, 
   Info, CheckCircle2, 
   LayoutDashboard,
-  Trophy, ShieldCheck, Plus, X, Send,
+  Trophy, Plus, X, Send,
   MessageSquare, Terminal, Award,
   Video, FileText, User as UserIcon, Briefcase, Globe
 } from 'lucide-react';
@@ -16,7 +16,7 @@ import {
   getStudentChecklist, updateChecklistStep,
   getSupportReplies, createSupportReply,
   getBadges, getUsers, getBatches, getMockTests,
-  Course, Enrollment, SupportTicket, Lesson, OnboardingStep, SupportReply, Badge, User, Batch, MockTest
+  Course, Enrollment, SupportTicket, Lesson, OnboardingStep, SupportReply, Badge, Batch, MockTest
 } from '../lib/turso';
 import StudentDashboard from './StudentDashboard';
 import CoursePlayer from './CoursePlayer';
