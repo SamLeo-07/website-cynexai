@@ -17,7 +17,7 @@ if (import.meta.env.DEV) {
 
 // Cache Invalidator for Local Storage - Ensure new videos are loaded
 if (typeof window !== 'undefined') {
-  const CURRENT_CACHE_VERSION = 'v6';
+  const CURRENT_CACHE_VERSION = 'v7';
   const storedVersion = localStorage.getItem('cynexai_cache_version');
   
   if (storedVersion !== CURRENT_CACHE_VERSION) {
@@ -55,21 +55,38 @@ export const rawClient = isTursoConfigured
   ? createClient({ url: url!, authToken: authToken! })
   : null;
 
-// Circuit Breaker: If connection fails, stop trying to use Turso for this session
+// Circuit Breaker: If connection fails, pause Turso for 60s then auto-retry
 let dbConnectionFailed = false;
+let dbConnectionFailedAt = 0;
+const CIRCUIT_BREAKER_RESET_MS = 60_000; // auto-reset after 60 seconds
 
-// Wrapped client proxy with 3-second timeout and circuit breaker
+// Utility: reset circuit breaker (also callable externally)
+export const resetCircuitBreaker = () => {
+  dbConnectionFailed = false;
+  dbConnectionFailedAt = 0;
+  console.log('Deepmind: Circuit breaker manually reset.');
+};
+
+// Wrapped client proxy with 10-second timeout and auto-resetting circuit breaker
 export const client = rawClient ? {
   ...rawClient,
-  execute: async (sqlOrConfig: any, timeoutMs = 3000): Promise<any> => {
+  execute: async (sqlOrConfig: any, timeoutMs = 10000): Promise<any> => {
+    // Auto-reset circuit breaker after CIRCUIT_BREAKER_RESET_MS
     if (dbConnectionFailed) {
-      throw new Error("Turso circuit breaker is active");
+      if (Date.now() - dbConnectionFailedAt > CIRCUIT_BREAKER_RESET_MS) {
+        dbConnectionFailed = false;
+        dbConnectionFailedAt = 0;
+        console.log('Deepmind: Circuit breaker auto-reset. Retrying Turso connection...');
+      } else {
+        throw new Error('Turso circuit breaker is active (will auto-reset in 60s)');
+      }
     }
     let timeoutId: any;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
         console.warn(`Deepmind: Turso query timed out after ${timeoutMs}ms. Activating circuit breaker.`);
         dbConnectionFailed = true;
+        dbConnectionFailedAt = Date.now();
         reject(new Error(`Database query timed out after ${timeoutMs}ms`));
       }, timeoutMs);
     });
@@ -80,6 +97,8 @@ export const client = rawClient ? {
         timeoutPromise
       ]);
       clearTimeout(timeoutId);
+      // Reset breaker on success
+      if (dbConnectionFailed) { dbConnectionFailed = false; dbConnectionFailedAt = 0; }
       return result;
     } catch (error) {
       clearTimeout(timeoutId);
@@ -89,8 +108,9 @@ export const client = rawClient ? {
         error.message.includes('connect') ||
         error.message.includes('auth')
       )) {
-        console.error("Deepmind: Activating Turso circuit breaker due to database failure:", error);
+        console.error('Deepmind: Activating Turso circuit breaker due to database failure:', error);
         dbConnectionFailed = true;
+        dbConnectionFailedAt = Date.now();
       }
       throw error;
     }
@@ -250,6 +270,7 @@ export const createUser = async (user: Omit<User, 'created_at'>) => {
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [newUser.id, newUser.name, newUser.email, newUser.password_hash || '', newUser.phone || '', newUser.role || 'student', newUser.created_at, newUser.batch_id || null, newUser.photo_url || null]
       });
+      localStorage.removeItem(USERS_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to create user in Turso, falling back", e);
@@ -278,6 +299,7 @@ export const updateUser = async (user: User) => {
           args: [user.password_hash, user.id]
         });
       }
+      localStorage.removeItem(USERS_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to update user in Turso, falling back", e);
@@ -300,6 +322,8 @@ export const deleteUser = async (id: string) => {
       });
       await client.execute({ sql: "DELETE FROM enrollments WHERE student_id = ?", args: [id] });
       await client.execute({ sql: "DELETE FROM payments WHERE student_id = ?", args: [id] });
+      localStorage.removeItem(USERS_LOCAL_KEY);
+      localStorage.removeItem(ENROLLMENTS_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to delete user in Turso, falling back", e);
@@ -5617,6 +5641,9 @@ export const issueCertificate = async (cert: Certificate): Promise<void> => {
         sql: `INSERT OR IGNORE INTO certificates (id, student_id, student_name, course_id, course_title, issued_at, certificate_number, credential_id, file_data, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [cert.id, cert.student_id, cert.student_name, cert.course_id, cert.course_title, cert.issued_at, cert.certificate_number, cert.credential_id || null, cert.file_data || null, cert.file_type || null]
       });
+      // Clear localStorage cache so next read fetches fresh data from Turso
+      localStorage.removeItem('cynexai_local_certificates');
+      return;
     } catch (e) { console.error('Failed to issue certificate', e); throw e; }
   }
   const local = localStorage.getItem('cynexai_local_certificates');
@@ -6242,6 +6269,8 @@ export const createBatch = async (batch: Batch) => {
         sql: `INSERT OR REPLACE INTO batches (id, name, course_id, created_at) VALUES (?, ?, ?, ?)`,
         args: [newBatch.id, newBatch.name, newBatch.course_id, newBatch.created_at]
       });
+      // Clear cache so all devices read fresh data
+      localStorage.removeItem(BATCHES_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to create batch in Turso", e);
@@ -6260,6 +6289,7 @@ export const updateBatch = async (batch: Batch) => {
         sql: `UPDATE batches SET name = ?, course_id = ? WHERE id = ?`,
         args: [batch.name, batch.course_id, batch.id]
       });
+      localStorage.removeItem(BATCHES_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to update batch in Turso", e);
@@ -6276,6 +6306,8 @@ export const deleteBatch = async (id: string) => {
     try {
       await client.execute({ sql: `DELETE FROM batches WHERE id = ?`, args: [id] });
       await client.execute({ sql: `DELETE FROM daily_recordings WHERE batch_id = ?`, args: [id] });
+      localStorage.removeItem(BATCHES_LOCAL_KEY);
+      localStorage.removeItem(RECORDINGS_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to delete batch in Turso", e);
@@ -6359,6 +6391,7 @@ export const createDailyRecording = async (rec: DailyRecording) => {
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [newRec.id, newRec.batch_id, newRec.subject, newRec.title, newRec.description || null, newRec.video_url, newRec.duration || null, newRec.recording_date, newRec.chapters || null, newRec.created_at]
       });
+      localStorage.removeItem(RECORDINGS_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to create daily recording in Turso", e);
@@ -6377,6 +6410,7 @@ export const updateDailyRecording = async (rec: DailyRecording) => {
         sql: `UPDATE daily_recordings SET batch_id = ?, subject = ?, title = ?, description = ?, video_url = ?, duration = ?, recording_date = ?, chapters = ? WHERE id = ?`,
         args: [rec.batch_id, rec.subject, rec.title, rec.description || null, rec.video_url, rec.duration || null, rec.recording_date, rec.chapters || null, rec.id]
       });
+      localStorage.removeItem(RECORDINGS_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to update daily recording in Turso", e);
@@ -6392,6 +6426,7 @@ export const deleteDailyRecording = async (id: string) => {
   if (isTursoConfigured && client && !dbConnectionFailed) {
     try {
       await client.execute({ sql: `DELETE FROM daily_recordings WHERE id = ?`, args: [id] });
+      localStorage.removeItem(RECORDINGS_LOCAL_KEY);
       return;
     } catch (e) {
       console.error("Deepmind: Failed to delete daily recording in Turso", e);
