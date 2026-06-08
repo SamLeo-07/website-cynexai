@@ -53,12 +53,6 @@ import {
   updateUser,
   deleteUser,
   User,
-  getAllPayments,
-  createPayment,
-  Payment,
-  updatePayment,
-  deletePayment,
-  togglePaymentVisibility,
   getSupportTickets,
   SupportTicket,
   updateSupportStatus,
@@ -127,7 +121,7 @@ export const safeParseArr = (v?: string | string[] | any): string[] => {
 };
 
 const AdminPanel = () => {
-  const [activeTab, setActiveTab] = useState<'articles' | 'courses' | 'coursemanager' | 'students' | 'payments' | 'tickets' | 'reviews' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'faqs' | 'recordings' | 'mocktests' | 'leaderboard' | 'projects'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'courses' | 'coursemanager' | 'students' | 'tickets' | 'reviews' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'faqs' | 'recordings' | 'mocktests' | 'leaderboard' | 'projects'>('articles');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Batches State
@@ -279,17 +273,6 @@ const AdminPanel = () => {
   const [enrollCourseId, setEnrollCourseId] = useState('');
   const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
 
-  // Payment & Enrollment State
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
-  const [paymentFormData, setPaymentFormData] = useState({
-    student_id: '',
-    total_amount: 0,
-    amount_paid: 0,
-    due_date: new Date().toISOString().split('T')[0],
-    status: 'pending' as 'paid' | 'pending'
-  });
 
   // Support State
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -398,18 +381,7 @@ const AdminPanel = () => {
         exportToCSV(data, 'students_report.csv', ['ID', 'Name', 'Email', 'Phone', 'Batch ID', 'Registered Date']);
         break;
       }
-      case 'payments': {
-        const data = payments.map(p => ({
-          ID: p.id,
-          StudentName: students.find(s => s.id === p.student_id)?.name || p.student_id,
-          TotalAmount: p.total_amount,
-          AmountPaid: p.amount_paid,
-          DueDate: p.due_date,
-          Status: p.status
-        }));
-        exportToCSV(data, 'payments_report.csv', ['Transaction ID', 'Student Name', 'Total Amount', 'Amount Paid', 'Due Date', 'Status']);
-        break;
-      }
+
       case 'tickets': {
         const data = tickets.map(t => ({
           ID: t.id,
@@ -451,7 +423,6 @@ const AdminPanel = () => {
       fetchPosts();
       fetchCourses();
       fetchStudents();
-      fetchPayments();
       fetchTickets();
       fetchAllEnrollments();
       fetchReviews();
@@ -508,14 +479,6 @@ const AdminPanel = () => {
     }
   };
 
-  const fetchPayments = async () => {
-    try {
-      const result = await getAllPayments();
-      setPayments(result);
-    } catch {
-      setError('Failed to fetch payments');
-    }
-  };
 
   const fetchTickets = async () => {
     try {
@@ -1394,92 +1357,6 @@ const AdminPanel = () => {
     }
   };
 
-  // --- PAYMENT HANDLERS ---
-  const handleOpenPaymentModal = () => {
-    setEditingPayment(null);
-    setPaymentFormData({
-      student_id: students.length > 0 ? students[0].id : '',
-      total_amount: 0,
-      amount_paid: 0,
-      due_date: new Date().toISOString().split('T')[0],
-      status: 'pending'
-    });
-    setIsPaymentModalOpen(true);
-    setError(null);
-  };
-
-  const handleOpenEditPaymentModal = (payment: Payment) => {
-    setEditingPayment(payment);
-    setPaymentFormData({
-      student_id: payment.student_id,
-      total_amount: payment.total_amount,
-      amount_paid: payment.amount_paid,
-      due_date: payment.due_date ? payment.due_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      status: payment.status
-    });
-    setIsPaymentModalOpen(true);
-    setError(null);
-  };
-
-  const handleDeletePayment = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this payment record?')) return;
-    try {
-      await deletePayment(id);
-      setSuccess('Payment record deleted successfully');
-      fetchPayments();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: unknown) {
-      setError(`Delete Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
-
-  const handleTogglePaymentVisibility = async (id: string, isVisible: boolean) => {
-    try {
-      await togglePaymentVisibility(id, !isVisible);
-      setSuccess(isVisible ? 'Payment hidden from student' : 'Payment made visible to student');
-      fetchPayments();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: unknown) {
-      setError(`Failed to toggle visibility: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
-
-  const handlePaymentFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormLoading(true);
-    setError(null);
-
-    try {
-      if (editingPayment) {
-        await updatePayment({
-          id: editingPayment.id,
-          student_id: paymentFormData.student_id,
-          total_amount: paymentFormData.total_amount,
-          amount_paid: paymentFormData.amount_paid,
-          due_date: paymentFormData.due_date,
-          status: paymentFormData.status,
-          isVisible: editingPayment.isVisible
-        });
-        setSuccess('Payment updated successfully');
-      } else {
-        const newPayment: Payment = {
-          ...paymentFormData,
-          id: `pay_${Date.now()}`,
-          isVisible: true
-        };
-        await createPayment(newPayment);
-        setSuccess('Payment recorded successfully');
-      }
-      setIsPaymentModalOpen(false);
-      setEditingPayment(null);
-      fetchPayments();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: unknown) {
-      setError(`Payment Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setFormLoading(false);
-    }
-  };
 
   const handleLogin = (password: string) => {
     const now = Date.now();
@@ -1645,7 +1522,6 @@ const AdminPanel = () => {
             { id: 'courses', label: 'Courses', Icon: BookOpen },
             { id: 'coursemanager', label: 'Course Manager', Icon: BookOpen },
             { id: 'students', label: 'Students', Icon: ShieldCheck },
-            { id: 'payments', label: 'Payments', Icon: FileText },
             { id: 'tickets', label: 'Support', Icon: MessageSquare },
             { id: 'reviews', label: 'Reviews', Icon: Star },
             { id: 'leaderboard', label: 'Leaderboard', Icon: Trophy },
@@ -1686,7 +1562,6 @@ const AdminPanel = () => {
                 {activeTab === 'courses' && 'Manage your training courses and curriculum.'}
                 {activeTab === 'coursemanager' && 'Advanced day-by-day curriculum builder.'}
                 {activeTab === 'students' && 'Manage student enrollments and profiles.'}
-                {activeTab === 'payments' && 'Track student payments and EMI installments.'}
                 {activeTab === 'tickets' && 'Respond to student helpdesk requests.'}
                 {activeTab === 'reviews' && 'Manage graduate success stories and testimonials.'}
                 {activeTab === 'faqs' && 'Manage frequently asked questions and answers.'}
@@ -1701,7 +1576,7 @@ const AdminPanel = () => {
               </p>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
-              {['articles', 'courses', 'students', 'payments', 'tickets', 'reviews'].includes(activeTab) && (
+              {['articles', 'courses', 'students', 'tickets', 'reviews'].includes(activeTab) && (
                 <button
                   onClick={handleDownloadReport}
                   className="inline-flex items-center px-4 py-2 sm:px-5 sm:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-md transition-all shadow-sm text-sm"
@@ -1712,13 +1587,12 @@ const AdminPanel = () => {
                   <span className="sm:hidden">Download</span>
                 </button>
               )}
-              {['articles', 'courses', 'students', 'payments', 'tickets', 'reviews'].includes(activeTab) && (
+              {['articles', 'courses', 'students', 'tickets', 'reviews'].includes(activeTab) && (
                 <button
                 onClick={() => {
                   if (activeTab === 'articles') handleOpenModal();
                   else if (activeTab === 'courses') handleOpenCourseModal();
                   else if (activeTab === 'students') handleOpenStudentModal();
-                  else if (activeTab === 'payments') handleOpenPaymentModal();
                   else if (activeTab === 'tickets') setIsAdminTicketModalOpen(true);
                   else if (activeTab === 'reviews') handleOpenReviewModal();
                 }}
@@ -1730,7 +1604,6 @@ const AdminPanel = () => {
                 {activeTab === 'articles' && 'New Article'}
                 {activeTab === 'courses' && 'New Course'}
                 {activeTab === 'students' && 'New Student'}
-                {activeTab === 'payments' && 'Record Payment'}
                 {activeTab === 'tickets' && 'Create Ticket'}
                 {activeTab === 'reviews' && 'New Success Story'}
                 </span>
@@ -1775,7 +1648,7 @@ const AdminPanel = () => {
         </AnimatePresence>
 
         {/* Search and Filters */}
-        {['articles', 'courses', 'students', 'payments', 'tickets', 'reviews'].includes(activeTab) && (
+        {['articles', 'courses', 'students', 'tickets', 'reviews'].includes(activeTab) && (
           <div className="bg-[#0f172a] rounded-md shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-slate-800 p-4 mb-8">
             <div className="relative border-slate-800">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1784,14 +1657,14 @@ const AdminPanel = () => {
                 placeholder="Search by title or category..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-secondary/5 border border-transparent focus:bg-secondary/10 focus:border-[#41c8df] rounded-xl outline-none transition-all text-secondary placeholder:text-gray-500"
+                className="w-full pl-12 pr-4 py-3 bg-secondary/5 border border-transparent focus:bg-[#41c8df]/10 focus:border-[#41c8df] rounded-xl outline-none transition-all text-secondary placeholder:text-gray-500"
               />
             </div>
           </div>
         )}
 
         {/* Content Table */}
-        {['articles', 'courses', 'students', 'payments', 'tickets', 'reviews'].includes(activeTab) ? (
+        {['articles', 'courses', 'students', 'tickets', 'reviews'].includes(activeTab) ? (
           <div className="bg-[#0f172a] rounded-md shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-slate-800 overflow-hidden">
             <div className="overflow-x-auto border-slate-800">
               {activeTab === 'articles' ? (
@@ -2307,83 +2180,6 @@ const AdminPanel = () => {
                     ))
                   )}
                 </tbody>
-              </table>
-            ) : activeTab === 'payments' ? (
-              <table className="w-full text-left">
-                <thead className="bg-secondary/5 border-b border-slate-800">
-                  <tr>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Payment ID</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Student ID</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Visibility</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                        <div className="flex flex-col items-center gap-2">
-                          <FileText className="w-12 h-12 text-gray-100 mb-2" />
-                          <span className="text-sm font-medium">No payments found.</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    payments.map(payment => (
-                      <tr key={payment.id} className="hover:bg-secondary/5 transition-colors group">
-                        <td className="px-6 py-4 text-sm text-secondary font-medium">{payment.id}</td>
-                        <td className="px-6 py-4 text-sm text-gray-300">{payment.student_id}</td>
-                        <td className="px-6 py-4 text-sm text-secondary font-bold">₹{payment.amount_paid} / ₹{payment.total_amount}</td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${payment.status === 'paid' ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'}`}>
-                            {payment.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          {payment.isVisible !== false ? (
-                            <span className="flex items-center text-xs font-bold text-cyan-500">
-                              <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 mr-2" />
-                              VISIBLE
-                            </span>
-                          ) : (
-                            <span className="flex items-center text-xs font-bold text-gray-400">
-                              <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2" />
-                              HIDDEN
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleTogglePaymentVisibility(payment.id, payment.isVisible !== false)}
-                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
-                              title={payment.isVisible !== false ? "Hide Payment" : "Show Payment"}
-                            >
-                              {payment.isVisible !== false ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                            <button
-                              onClick={() => handleOpenEditPaymentModal(payment)}
-                              className="p-2 text-gray-400 hover:text-[#41c8df] hover:bg-[#41c8df]/10 border border-transparent hover:border-[#41c8df]/30 rounded-lg transition-all"
-                              title="Edit Payment"
-                            >
-                              <Edit2 size={18} />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePayment(payment.id)}
-                              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
-                              title="Delete Payment"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
             ) : activeTab === 'tickets' ? (
               <table className="w-full text-left">
                 <thead className="bg-secondary/5 border-b border-slate-800">
@@ -3767,132 +3563,6 @@ const AdminPanel = () => {
         )}
       </AnimatePresence>
 
-      {/* Payment Modal */}
-      <AnimatePresence>
-        {isPaymentModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsPaymentModalOpen(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-background/90 backdrop-blur-2xl border border-secondary/20 rounded-lg p-8 w-full max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto">
-              <button onClick={() => setIsPaymentModalOpen(false)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all" title="Close Modal">
-                <X size={20} />
-              </button>
-
-              <h2 className="text-2xl font-display font-bold text-secondary mb-2 flex items-center gap-3">
-                <FileText className="text-[#41c8df]" />
-                {editingPayment ? 'Edit Payment Record' : 'Record Payment'}
-              </h2>
-              <p className="text-sm text-gray-400 mb-8">
-                {editingPayment ? 'Modify the details of this fee payment or EMI installment.' : 'Log a fee payment or EMI installment for a student.'}
-              </p>
-
-              {error && (
-                <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-200">{error}</p>
-                </div>
-              )}
-
-              <form onSubmit={handlePaymentFormSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <label htmlFor="payment-student" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Student *</label>
-                  <select
-                    id="payment-student"
-                    required
-                    value={paymentFormData.student_id}
-                    onChange={(e) => setPaymentFormData({ ...paymentFormData, student_id: e.target.value })}
-                    className="w-full px-4 py-3 bg-secondary/5 border border-slate-800 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
-                    title="Select Student"
-                  >
-                    <option value="">-- Select Student --</option>
-                    {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.email})</option>)}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label htmlFor="payment-total" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Fee (₹) *</label>
-                    <input
-                      id="payment-total"
-                      type="number" required min={0}
-                      value={paymentFormData.total_amount}
-                      onChange={(e) => setPaymentFormData({ ...paymentFormData, total_amount: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-3 bg-secondary/5 border border-slate-800 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
-                      placeholder="e.g. 50000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="payment-paid" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Amount Paid (₹) *</label>
-                    <input
-                      id="payment-paid"
-                      type="number" required min={0}
-                      value={paymentFormData.amount_paid}
-                      onChange={(e) => setPaymentFormData({ ...paymentFormData, amount_paid: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-3 bg-secondary/5 border border-slate-800 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
-                      placeholder="e.g. 10000"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label htmlFor="payment-due" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Due Date *</label>
-                    <input
-                      id="payment-due"
-                      type="date" required
-                      value={paymentFormData.due_date}
-                      onChange={(e) => setPaymentFormData({ ...paymentFormData, due_date: e.target.value })}
-                      className="w-full px-4 py-3 bg-secondary/5 border border-slate-800 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
-                      title="Due Date"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="payment-status" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status</label>
-                    <select
-                      id="payment-status"
-                      value={paymentFormData.status}
-                      onChange={(e) => setPaymentFormData({ ...paymentFormData, status: e.target.value as 'pending' | 'paid' })}
-                      className="w-full px-4 py-3 bg-secondary/5 border border-slate-800 focus:border-[#41c8df] rounded-xl outline-none text-secondary appearance-none"
-                      title="Payment Status"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="paid">Paid</option>
-                    </select>
-                  </div>
-                </div>
-
-                {paymentFormData.total_amount > 0 && (
-                  <div className="bg-secondary/5 border border-slate-800 rounded-xl p-4">
-                    <div className="flex justify-between text-sm font-bold text-gray-400 mb-2">
-                      <span>Balance Due</span>
-                      <span className={paymentFormData.total_amount - paymentFormData.amount_paid > 0 ? 'text-yellow-400' : 'text-green-400'}>
-                        ₹{(paymentFormData.total_amount - paymentFormData.amount_paid).toLocaleString()}
-                      </span>
-                    </div>
-                      <div className="w-full bg-white/5 rounded-full h-2">
-                        <motion.div
-                          className="bg-[#41c8df] h-2 rounded-full"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.min((paymentFormData.amount_paid / paymentFormData.total_amount) * 100, 100)}%` }}
-                          transition={{ duration: 0.5, ease: "easeOut" }}
-                        />
-                      </div>
-                    <p className="text-xs text-gray-500 mt-1 text-right">
-                      {Math.round((paymentFormData.amount_paid / paymentFormData.total_amount) * 100)}% cleared
-                    </p>
-                  </div>
-                )}
-
-                <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-end gap-4">
-                  <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-8 py-4 text-gray-400 hover:text-secondary font-bold uppercase text-xs">Cancel</button>
-                  <button type="submit" disabled={formLoading} className="px-10 py-4 bg-white text-black font-black uppercase text-xs rounded-md transition-all shadow-xl disabled:opacity-50">
-                    {formLoading ? 'Saving...' : editingPayment ? 'Save Changes' : 'Record Payment'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {selectedTicket && (

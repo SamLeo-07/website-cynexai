@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LogOut, BookOpen, Clock, PlayCircle, 
-  CreditCard, Info, CheckCircle2, 
-  Calendar, Wallet, LayoutDashboard,
+  Info, CheckCircle2, 
+  LayoutDashboard,
   Trophy, ShieldCheck, Plus, X, Send,
   MessageSquare, Terminal, Award,
   Video, FileText, User as UserIcon, Briefcase, Globe
@@ -11,12 +11,12 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { 
   getEnrollmentsByStudent, getCourses, 
-  getPaymentsByStudent, getSupportTickets,
+  getSupportTickets,
   createSupportTicket, getLessonsByCourse,
   getStudentChecklist, updateChecklistStep,
   getSupportReplies, createSupportReply,
   getBadges, getUsers, getBatches, getMockTests,
-  Course, Enrollment, Payment, SupportTicket, Lesson, OnboardingStep, SupportReply, Badge, User, Batch, MockTest
+  Course, Enrollment, SupportTicket, Lesson, OnboardingStep, SupportReply, Badge, User, Batch, MockTest
 } from '../lib/turso';
 import StudentDashboard from './StudentDashboard';
 import CoursePlayer from './CoursePlayer';
@@ -33,7 +33,7 @@ import { GlobalLeaderboard } from './GlobalLeaderboard';
 
 const StudentPortal = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'achievements' | 'finance' | 'support' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'recordings' | 'mocktests' | 'profile' | 'projects' | 'leaderboard'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'achievements' | 'support' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'recordings' | 'mocktests' | 'profile' | 'projects' | 'leaderboard'>('dashboard');
   const [studentName, setStudentName] = useState('');
   const [studentId, setStudentId] = useState('');
   const [studentBatchId, setStudentBatchId] = useState('');
@@ -41,7 +41,6 @@ const StudentPortal = () => {
   const [batchesList, setBatchesList] = useState<Batch[]>([]);
   const [selectedCurriculumCourse, setSelectedCurriculumCourse] = useState<Course | null>(null);
   const [isCurriculumModalOpen, setIsCurriculumModalOpen] = useState(false);
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [checklist, setChecklist] = useState<OnboardingStep[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
@@ -71,12 +70,8 @@ const StudentPortal = () => {
     { id: 'certificates', label: 'Certificates', icon: Award },
     { id: 'doubts', label: 'Doubt Wall', icon: MessageSquare },
     { id: 'achievements', label: 'Achievements', icon: Trophy },
-    { id: 'finance', label: 'Finance & Payments', icon: CreditCard },
     { id: 'support', label: 'Help & Support', icon: Info },
   ];
-
-  const totalPaid = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount_paid, 0);
-  const totalDue = payments.filter(p => p.status !== 'paid').reduce((sum, p) => sum + p.amount_paid, 0);
 
   useEffect(() => {
     const isAuth = localStorage.getItem('cynexai_student_auth');
@@ -93,10 +88,9 @@ const StudentPortal = () => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [studentEnrollments, allCoursesData, studentPayments, studentTickets, studentChecklist, studentBadges, allUsers, allBatches, allMockTests] = await Promise.all([
+        const [studentEnrollments, allCoursesData, studentTickets, studentChecklist, studentBadges, allUsers, allBatches, allMockTests] = await Promise.all([
           getEnrollmentsByStudent(id),
           getCourses(true),
-          getPaymentsByStudent(id),
           getSupportTickets(id),
           getStudentChecklist(id),
           getBadges(id),
@@ -120,7 +114,6 @@ const StudentPortal = () => {
         }).filter(Boolean) as { enrollment: Enrollment; course: Course }[];
 
         setEnrollments(enriched);
-        setPayments(studentPayments);
         setTickets(studentTickets);
         setChecklist(studentChecklist);
       } catch (error) {
@@ -420,74 +413,7 @@ const StudentPortal = () => {
                 </motion.div>
               )}
 
-              {activeTab === 'finance' && (
-                <motion.div
-                  key="finance"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="space-y-8"
-                >
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
-                    <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 sm:p-6 rounded-xl shadow-sm transition-all">
-                      <div className="w-10 h-10 bg-background-100 rounded-md flex items-center justify-center text-emerald-400 mb-3 sm:mb-4 shadow-sm border border-secondary/10">
-                        <Wallet size={16} />
-                      </div>
-                      <p className="text-[9px] sm:text-xs font-semibold text-secondary/60 uppercase tracking-widest mb-1">Total Paid</p>
-                      <h4 className="text-xl sm:text-2xl font-bold text-secondary">₹{totalPaid.toLocaleString()}</h4>
-                    </div>
-                    <div className="bg-orange-500/5 border border-orange-500/20 p-4 sm:p-6 rounded-xl shadow-sm transition-all">
-                      <div className="w-10 h-10 bg-background-100 rounded-md flex items-center justify-center text-orange-400 mb-3 sm:mb-4 shadow-sm border border-secondary/10">
-                        <Calendar size={16} />
-                      </div>
-                      <p className="text-[9px] sm:text-xs font-semibold text-secondary/60 uppercase tracking-widest mb-1">Upcoming EMI</p>
-                      <h4 className="text-xl sm:text-2xl font-bold text-secondary">₹{totalDue.toLocaleString()}</h4>
-                    </div>
-                    <div className="col-span-2 sm:col-span-1 bg-indigo-500/5 border border-indigo-500/20 p-4 sm:p-6 rounded-xl shadow-sm transition-all">
-                      <div className="w-10 h-10 bg-background-100 rounded-md flex items-center justify-center text-indigo-400 mb-3 sm:mb-4 shadow-sm border border-secondary/10">
-                        <ShieldCheck className="w-5 h-5 text-indigo-400" />
-                      </div>
-                      <p className="text-[9px] sm:text-xs font-semibold text-secondary/60 uppercase tracking-widest mb-1">Payment Status</p>
-                      <h4 className="text-xl sm:text-2xl font-bold text-secondary">VERIFIED</h4>
-                    </div>
-                  </div>
 
-                  <div className="bg-background-100 border border-secondary/10 rounded-xl overflow-hidden shadow-sm">
-                    <div className="px-4 sm:px-6 py-4 border-b border-secondary/10 flex items-center justify-between gap-3">
-                      <h3 className="font-bold text-base text-secondary">Transaction History</h3>
-                      <div className="px-3 py-1 bg-secondary/5 rounded-md text-[9px] font-black text-secondary/40 uppercase tracking-widest hidden sm:block">End-to-End Encrypted</div>
-                    </div>
-                    <div className="mobile-table-wrap">
-                      <table className="w-full text-left table-min">
-                        <thead className="bg-secondary/5 border-b border-secondary/10">
-                          <tr>
-                            <th className="px-4 sm:px-8 py-4 text-[10px] font-black text-secondary/60 uppercase tracking-widest">Reference ID</th>
-                            <th className="px-4 sm:px-8 py-4 text-[10px] font-black text-secondary/60 uppercase tracking-widest">Amount</th>
-                            <th className="px-4 sm:px-8 py-4 text-[10px] font-black text-secondary/60 uppercase tracking-widest">Due Date</th>
-                            <th className="px-4 sm:px-8 py-4 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-secondary/5">
-                          {payments.map(p => (
-                            <tr key={p.id} className="hover:bg-secondary/5 transition-colors">
-                              <td className="px-4 sm:px-8 py-4 text-xs sm:text-sm font-mono text-secondary/40">{p.id.substring(0, 12)}</td>
-                              <td className="px-4 sm:px-8 py-4 text-sm font-black text-secondary">₹{p.amount_paid.toLocaleString()}</td>
-                              <td className="px-4 sm:px-8 py-4 text-xs sm:text-sm text-secondary/60">{new Date(p.due_date).toLocaleDateString()}</td>
-                              <td className="px-4 sm:px-8 py-4 text-right">
-                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
-                                  p.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'
-                                }`}>
-                                  {p.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
               {activeTab === 'support' && (
                 <motion.div

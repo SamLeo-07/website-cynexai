@@ -24,8 +24,8 @@ interface StudentDashboardProps {
   checklist: OnboardingStep[];
   badges: Badge[];
   onUpdateChecklist: (stepId: string, isDone: boolean) => void;
-  setActiveTab: (tab: 'dashboard' | 'courses' | 'achievements' | 'finance' | 'support') => void;
-  onNavigate: (tab: 'dashboard' | 'courses' | 'achievements' | 'finance' | 'support') => void;
+  setActiveTab: (tab: any) => void;
+  onNavigate: (tab: any) => void;
   onPlayCourse: (course: Course, enrollment: Enrollment) => void;
 }
 
