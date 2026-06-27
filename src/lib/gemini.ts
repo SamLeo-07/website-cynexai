@@ -290,3 +290,51 @@ No markdown, no extra text.`;
   const text = await geminiText(prompt);
   return parseJsonFromText(text) as QuestionPatch[];
 };
+
+// ─── Evaluate Student SQL query using Gemini ───────────────────────────────
+export const evaluateSQLQueryAI = async (
+  questionText: string,
+  teacherExplanation: string,
+  studentQuery: string
+): Promise<{ score: number; isCorrect: boolean; feedback: string }> => {
+  const prompt = `You are an expert SQL evaluator.
+Evaluate if the student's query is logically correct and satisfies the requirements of the database query question.
+Note that the student is writing queries against the classic Oracle EMP/DEPT database tables (emp and dept).
+
+Teacher's Question: "${questionText}"
+Teacher's Model Answer / Explanation: "${teacherExplanation}"
+Student's Executed Query: "${studentQuery}"
+
+Evaluate if the student's query is logically correct and satisfies the question.
+Students can write queries in different ways (using different aliases, different JOIN styles, or capitalization), but their logical output must match the intent of the question.
+Provide a score between 0 to 100 representing how correct their query is. If it meets at least 80% correctness, set isCorrect to true. Otherwise, set it to false.
+
+Return ONLY a valid JSON object with NO markdown formatting, NO extra text, in this exact structure:
+{
+  "score": <number from 0 to 100>,
+  "isCorrect": <true or false>,
+  "feedback": "<brief constructive feedback explaining if their logic is correct, and if they made any minor errors>"
+}`;
+
+  try {
+    const text = await geminiText(prompt);
+    const parsed = parseJsonFromText(text);
+    return {
+      score: typeof parsed.score === 'number' ? parsed.score : 0,
+      isCorrect: typeof parsed.isCorrect === 'boolean' ? parsed.isCorrect : false,
+      feedback: String(parsed.feedback || 'No feedback provided.')
+    };
+  } catch (e) {
+    console.error("Gemini evaluateSQLQueryAI error:", e);
+    // Fallback: literal string cleanup comparison
+    const cleanStudent = studentQuery?.trim().replace(/\\s+/g, ' ').toLowerCase();
+    const cleanTeacher = teacherExplanation?.trim().replace(/\\s+/g, ' ').toLowerCase();
+    const matches = cleanStudent === cleanTeacher || (cleanStudent && cleanTeacher && cleanTeacher.includes(cleanStudent));
+    return {
+      score: matches ? 100 : 0,
+      isCorrect: !!matches,
+      feedback: "Semantic grading offline. Performed fallback literal matching."
+    };
+  }
+};
+

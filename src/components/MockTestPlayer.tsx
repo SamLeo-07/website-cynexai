@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-empty */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -5,21 +6,562 @@ import {
   Camera, CameraOff, AlertTriangle, CheckCircle2, Trophy, Clock,
   ChevronLeft, ChevronRight, Shield, ShieldAlert, Eye,
   BookOpen, BarChart3, AlertCircle, XCircle, CheckSquare,
-  ChevronDown, ChevronUp, Brain
+  ChevronDown, ChevronUp, Brain, Play, Database, Terminal,
+  Loader2, Code2
 } from 'lucide-react';
 import {
   getMockTests, getQuestions, createTestResult, getTestResults,
-  MockTest, Question, TestResult
+  MockTest, Question, TestResult, ProctoringLog
 } from '../lib/turso';
 import Editor from '@monaco-editor/react';
+import { runSQLEngine } from '../lib/sqlEngine';
+import { evaluateSQLQueryAI } from '../lib/gemini';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface ProctoringLog {
-  timestamp: string;
-  type: 'head_moved' | 'tab_switch' | 'camera_denied' | 'mobile_detected' | 'multiple_faces' | 'fullscreen_exit' | 'shortcut_blocked' | 'devtools_detected';
-  detail: string;
+// ─── Multi-Language Compiler Config ──────────────────────────────────────────
+const PISTON_API = 'https://emkc.org/api/v2/piston';
+
+interface LangConfig {
+  label: string;
+  pistonLang: string;
+  pistonVersion: string;
+  monacoLang: string;
+  defaultCode: string;
+  icon: string;
 }
 
+const LANG_CONFIGS: Record<string, LangConfig> = {
+  python: {
+    label: 'Python 3',
+    pistonLang: 'python',
+    pistonVersion: '3.10.0',
+    monacoLang: 'python',
+    icon: '🐍',
+    defaultCode: `# Python 3 — All standard library available
+print("Hello, World!")
+
+# Example: Fibonacci
+def fib(n):
+    a, b = 0, 1
+    for _ in range(n):
+        print(a, end=' ')
+        a, b = b, a + b
+
+fib(10)
+`
+  },
+  javascript: {
+    label: 'JavaScript',
+    pistonLang: 'javascript',
+    pistonVersion: '18.15.0',
+    monacoLang: 'javascript',
+    icon: '🟨',
+    defaultCode: `// JavaScript (Node.js 18) — Full stdlib available
+console.log("Hello, World!");
+
+// Example
+const arr = [1, 2, 3, 4, 5];
+const sum = arr.reduce((a, b) => a + b, 0);
+console.log("Sum:", sum);
+`
+  },
+  typescript: {
+    label: 'TypeScript',
+    pistonLang: 'typescript',
+    pistonVersion: '5.0.3',
+    monacoLang: 'typescript',
+    icon: '🔷',
+    defaultCode: `// TypeScript
+function greet(name: string): string {
+  return \`Hello, \${name}!\`;
+}
+
+console.log(greet("World"));
+`
+  },
+  java: {
+    label: 'Java',
+    pistonLang: 'java',
+    pistonVersion: '15.0.2',
+    monacoLang: 'java',
+    icon: '☕',
+    defaultCode: `// Java 15 — Full JDK available
+import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, World!");
+        
+        // Example: Factorial
+        int n = 10;
+        long fact = 1;
+        for (int i = 1; i <= n; i++) fact *= i;
+        System.out.println("10! = " + fact);
+    }
+}
+`
+  },
+  c: {
+    label: 'C',
+    pistonLang: 'c',
+    pistonVersion: '10.2.0',
+    monacoLang: 'c',
+    icon: '🔵',
+    defaultCode: `#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main() {
+    printf("Hello, World!\n");
+    
+    // Example: Sum 1 to N
+    int n = 100, sum = 0;
+    for (int i = 1; i <= n; i++) sum += i;
+    printf("Sum 1-100 = %d\n", sum);
+    return 0;
+}
+`
+  },
+  cpp: {
+    label: 'C++',
+    pistonLang: 'c++',
+    pistonVersion: '10.2.0',
+    monacoLang: 'cpp',
+    icon: '🔷',
+    defaultCode: `#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int main() {
+    cout << "Hello, World!" << endl;
+    
+    vector<int> v = {5, 3, 1, 4, 2};
+    sort(v.begin(), v.end());
+    for (int x : v) cout << x << " ";
+    cout << endl;
+    return 0;
+}
+`
+  },
+  go: {
+    label: 'Go',
+    pistonLang: 'go',
+    pistonVersion: '1.16.2',
+    monacoLang: 'go',
+    icon: '🐹',
+    defaultCode: `package main
+
+import (
+    "fmt"
+    "math"
+)
+
+func main() {
+    fmt.Println("Hello, World!")
+    fmt.Printf("Square root of 16 = %.0f\n", math.Sqrt(16))
+}
+`
+  },
+  rust: {
+    label: 'Rust',
+    pistonLang: 'rust',
+    pistonVersion: '1.50.0',
+    monacoLang: 'rust',
+    icon: '🦀',
+    defaultCode: `fn main() {
+    println!("Hello, World!");
+    
+    let v: Vec<i32> = (1..=10).collect();
+    let sum: i32 = v.iter().sum();
+    println!("Sum 1-10 = {}", sum);
+}
+`
+  },
+  ruby: {
+    label: 'Ruby',
+    pistonLang: 'ruby',
+    pistonVersion: '3.0.1',
+    monacoLang: 'ruby',
+    icon: '💎',
+    defaultCode: `# Ruby 3
+puts "Hello, World!"
+
+# Example
+arr = [1, 2, 3, 4, 5]
+puts "Sum: #{arr.sum}"
+puts arr.map { |x| x ** 2 }.inspect
+`
+  },
+  php: {
+    label: 'PHP',
+    pistonLang: 'php',
+    pistonVersion: '8.0.13',
+    monacoLang: 'php',
+    icon: '🐘',
+    defaultCode: `<?php
+echo "Hello, World!\n";
+
+$arr = [1, 2, 3, 4, 5];
+echo "Sum: " . array_sum($arr) . "\n";
+?>
+`
+  },
+  kotlin: {
+    label: 'Kotlin',
+    pistonLang: 'kotlin',
+    pistonVersion: '1.6.20',
+    monacoLang: 'kotlin',
+    icon: '🎯',
+    defaultCode: `fun main() {
+    println("Hello, World!")
+    
+    val list = listOf(1, 2, 3, 4, 5)
+    println("Sum: \${list.sum()}")
+}
+`
+  },
+  html: {
+    label: 'HTML',
+    pistonLang: '',
+    pistonVersion: '',
+    monacoLang: 'html',
+    icon: '🌐',
+    defaultCode: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Page</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0f4f8; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+    h1 { color: #6366f1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Hello, World!</h1>
+    <p>Edit this HTML and click Run to see live preview!</p>
+  </div>
+</body>
+</html>
+`
+  },
+  css: {
+    label: 'CSS',
+    pistonLang: '',
+    pistonVersion: '',
+    monacoLang: 'css',
+    icon: '🎨',
+    defaultCode: `/* CSS Preview */
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+}
+
+.box {
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+`
+  }
+};
+
+// ─── Code Compiler Component ──────────────────────────────────────────────────
+interface CompilerProps {
+  value: string;
+  onChange: (code: string) => void;
+  questionId: string;
+  questionLanguage?: string; // hint from admin question language
+}
+
+const CodeCompiler: React.FC<CompilerProps> = ({ value, onChange, questionLanguage }) => {
+  // Determine initial language from question hint
+  const detectInitialLang = (): string => {
+    if (!questionLanguage) return 'python';
+    const ql = questionLanguage.toLowerCase();
+    if (ql.includes('python')) return 'python';
+    if (ql.includes('java') && !ql.includes('script')) return 'java';
+    if (ql.includes('javascript') || ql.includes('js')) return 'javascript';
+    if (ql.includes('typescript') || ql.includes('ts')) return 'typescript';
+    if (ql.includes('c++') || ql.includes('cpp')) return 'cpp';
+    if (ql.includes(' c ') || ql === 'c') return 'c';
+    if (ql.includes('go') || ql.includes('golang')) return 'go';
+    if (ql.includes('rust')) return 'rust';
+    if (ql.includes('ruby')) return 'ruby';
+    if (ql.includes('php')) return 'php';
+    if (ql.includes('kotlin')) return 'kotlin';
+    if (ql.includes('html')) return 'html';
+    if (ql.includes('css')) return 'css';
+    if (ql.includes('sql')) return 'python'; // fallback
+    return 'python';
+  };
+
+  const [selectedLang, setSelectedLang] = useState<string>(detectInitialLang);
+  const [stdin, setStdin] = useState('');
+  const [output, setOutput] = useState<string | null>(null);
+  const [outputError, setOutputError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runTime, setRunTime] = useState<number | null>(null);
+  const [showStdin, setShowStdin] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const [htmlPreview, setHtmlPreview] = useState<string | null>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
+
+  const cfg = LANG_CONFIGS[selectedLang];
+
+  // When language changes, pre-fill with default code if editor is empty
+  const handleLangChange = (langKey: string) => {
+    setSelectedLang(langKey);
+    setShowLangMenu(false);
+    setOutput(null);
+    setOutputError(null);
+    setHtmlPreview(null);
+    // If the editor is blank or has old default, replace with new default
+    const newCfg = LANG_CONFIGS[langKey];
+    if (!value || Object.values(LANG_CONFIGS).some(c => c.defaultCode === value)) {
+      onChange(newCfg.defaultCode);
+    }
+  };
+
+  // Initialize code when component mounts
+  useEffect(() => {
+    if (!value) {
+      onChange(cfg.defaultCode);
+    }
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setShowLangMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const runCode = async () => {
+    if (running) return;
+    setRunning(true);
+    setOutput(null);
+    setOutputError(null);
+    setHtmlPreview(null);
+    const t0 = Date.now();
+
+    // Handle HTML / CSS preview — no server call needed
+    if (selectedLang === 'html') {
+      setHtmlPreview(value);
+      setRunning(false);
+      setRunTime(0);
+      return;
+    }
+    if (selectedLang === 'css') {
+      const html = `<!DOCTYPE html><html><head><style>${value}</style></head><body><div class="box"><p>CSS Preview</p></div></body></html>`;
+      setHtmlPreview(html);
+      setRunning(false);
+      setRunTime(0);
+      return;
+    }
+
+    try {
+      const body = {
+        language: cfg.pistonLang,
+        version: cfg.pistonVersion,
+        files: [{ name: 'main', content: value }],
+        stdin: stdin || ''
+      };
+      const res = await fetch(`${PISTON_API}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      const elapsed = Date.now() - t0;
+      setRunTime(elapsed);
+
+      const run = data.run || data.compile || {};
+      const stdout = run.stdout || '';
+      const stderr = run.stderr || data.compile?.stderr || '';
+      const exitCode = run.code ?? 0;
+
+      if (exitCode !== 0 || stderr) {
+        setOutputError(stderr || `Process exited with code ${exitCode}`);
+        if (stdout) setOutput(stdout);
+      } else {
+        setOutput(stdout || '(No output)');
+      }
+    } catch (err: any) {
+      setOutputError(`Network error: ${err?.message || 'Unable to reach compiler server. Check your internet connection.'}`);
+      setRunTime(Date.now() - t0);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Language Selector */}
+        <div className="relative" ref={langMenuRef}>
+          <button
+            type="button"
+            onClick={() => setShowLangMenu(v => !v)}
+            className="flex items-center gap-2 px-3 py-2 bg-[#1e293b] hover:bg-[#273548] border border-white/10 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer"
+          >
+            <span>{cfg.icon}</span>
+            <span>{cfg.label}</span>
+            <Code2 size={12} className="text-gray-400" />
+          </button>
+          {showLangMenu && (
+            <div className="absolute top-full left-0 mt-1 z-50 bg-[#0f1623] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden min-w-[180px] max-h-72 overflow-y-auto">
+              {Object.entries(LANG_CONFIGS).map(([key, lc]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleLangChange(key)}
+                  className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium transition-colors cursor-pointer ${
+                    selectedLang === key
+                      ? 'bg-indigo-600/30 text-indigo-300'
+                      : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <span>{lc.icon}</span>
+                  <span>{lc.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Run Button */}
+        <button
+          type="button"
+          onClick={runCode}
+          disabled={running}
+          className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-emerald-500/30 cursor-pointer"
+        >
+          {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} className="fill-current" />}
+          {running ? 'Running...' : 'Run Code'}
+        </button>
+
+        {/* Stdin Toggle */}
+        {selectedLang !== 'html' && selectedLang !== 'css' && (
+          <button
+            type="button"
+            onClick={() => setShowStdin(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-medium text-gray-400 transition-colors cursor-pointer"
+          >
+            <Terminal size={12} />
+            {showStdin ? 'Hide stdin' : 'stdin input'}
+          </button>
+        )}
+
+        {/* Runtime badge */}
+        {runTime !== null && (
+          <span className="text-[10px] text-gray-500 font-mono ml-auto">
+            ⏱ {runTime}ms
+          </span>
+        )}
+      </div>
+
+      {/* Monaco Editor */}
+      <div className="h-[340px] w-full rounded-xl overflow-hidden border border-white/10 shadow-lg">
+        <Editor
+          height="100%"
+          language={cfg.monacoLang}
+          theme="vs-dark"
+          value={value || cfg.defaultCode}
+          onChange={(v: string | undefined) => onChange(v || '')}
+          options={{
+            minimap: { enabled: false },
+            fontSize: 14,
+            wordWrap: 'on',
+            padding: { top: 14, bottom: 14 },
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            renderLineHighlight: 'line',
+            automaticLayout: true,
+            tabSize: selectedLang === 'python' ? 4 : 2,
+            insertSpaces: true,
+          }}
+        />
+      </div>
+
+      {/* Stdin Input */}
+      {showStdin && (
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 flex items-center gap-1">
+            <Terminal size={10} /> Standard Input (stdin)
+          </label>
+          <textarea
+            value={stdin}
+            onChange={(e) => setStdin(e.target.value)}
+            placeholder="Provide input for your program (one value per line)..."
+            rows={3}
+            className="w-full px-4 py-3 bg-[#0d1521] border border-white/10 rounded-xl text-xs text-gray-300 font-mono placeholder-gray-600 outline-none focus:border-[#41c8df] resize-none"
+          />
+        </div>
+      )}
+
+      {/* Output Panel */}
+      {(output !== null || outputError !== null || htmlPreview !== null) && (
+        <div className="bg-[#080d14] border border-white/10 rounded-xl overflow-hidden shadow-inner">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 bg-white/3">
+            <Terminal size={12} className="text-gray-500" />
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Output</span>
+            {outputError ? (
+              <span className="ml-auto text-[9px] font-black uppercase px-2 py-0.5 rounded bg-red-500/10 text-red-400">Error</span>
+            ) : htmlPreview ? (
+              <span className="ml-auto text-[9px] font-black uppercase px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">Preview</span>
+            ) : (
+              <span className="ml-auto text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">Success</span>
+            )}
+          </div>
+
+          {htmlPreview ? (
+            <iframe
+              srcDoc={htmlPreview}
+              sandbox="allow-scripts"
+              className="w-full h-56 bg-white border-0"
+              title="HTML/CSS Preview"
+            />
+          ) : (
+            <div className="p-4 space-y-3">
+              {outputError && (
+                <div className="font-mono text-xs text-red-300 leading-relaxed whitespace-pre-wrap bg-red-500/5 p-3 rounded-lg border border-red-500/10">
+                  <span className="text-red-500 font-black">● STDERR / Error:</span>\n{outputError}
+                </div>
+              )}
+              {output !== null && (
+                <pre className="font-mono text-xs text-emerald-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                  {output}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 // ─── Utility ──────────────────────────────────────────────────────────────────
 const formatTime = (seconds: number) => {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -218,6 +760,13 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
   const [confidenceRatings, setConfidenceRatings] = useState<Record<string, 'confident' | 'unsure' | 'guess'>>({});
   const [openExplanations, setOpenExplanations] = useState<Set<string>>(new Set());
 
+  // ─ SQL Sandbox State (pure JS engine – no WASM) ─
+  const [queryResults, setQueryResults] = useState<{ columns: string[]; rows: any[][] } | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [isGrading, setIsGrading] = useState(false);
+  const [sqlFeedback, setSqlFeedback] = useState<Record<string, { score: number; isCorrect: boolean; feedback: string }>>({}); 
+  const dbLoading = false; // kept for UI compat – engine is synchronous
+
   // ─ Camera State ─
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraGranted, setCameraGranted] = useState(false);
@@ -246,6 +795,38 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
   terminatedRef.current = terminated;
   testSubmittedRef.current = testSubmitted;
 
+  // ─── SQL Query Runner (pure JS engine, synchronous, zero latency) ─────────
+  const runSQLQuery = (queryText: string) => {
+    setQueryResults(null);
+    setQueryError(null);
+
+    if (!queryText.trim()) {
+      setQueryError('Please write a SQL query first.');
+      return;
+    }
+
+    try {
+      const result = runSQLEngine(queryText);
+      if (result.rows.length === 0) {
+        setQueryResults({ columns: result.columns, rows: [] });
+        setQueryError('Query executed successfully, but returned 0 rows.');
+      } else {
+        setQueryResults(result);
+        setQueryError(null);
+      }
+    } catch (err: any) {
+      setQueryResults(null);
+      setQueryError(err.message || String(err));
+    }
+  };
+
+  useEffect(() => {
+    setQueryResults(null);
+    setQueryError(null);
+  }, [currentIdx]);
+
+
+
   const studentName = localStorage.getItem('cynexai_student_name') || 'Student';
   const studentId = localStorage.getItem('cynexai_student_id') || 'demo-student-id';
 
@@ -265,9 +846,8 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
 
     if (testSubmittedRef.current) return;
     testSubmittedRef.current = true;
-    setTestSubmitted(true);
-    // stopCamera is defined later, but since this is called later, it's fine
-    // However, it's better to inline the stream stopping or rely on the cleanup
+    setIsGrading(true);
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
     }
@@ -275,7 +855,9 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
 
     const timeTaken = Math.round((Date.now() - startTime) / 1000);
     let correctCount = 0;
-    questions.forEach(q => {
+    const sqlFeedbackMap: Record<string, { score: number; isCorrect: boolean; feedback: string }> = {};
+
+    for (const q of questions) {
       if (q.type === 'mcq' || q.type === 'true-false') {
         const sel = selectedAnswers[q.id];
         if (sel !== undefined && q.correctAnswer !== undefined && sel === q.correctAnswer) {
@@ -287,8 +869,33 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
         if (textAns && correctText && textAns === correctText) {
           correctCount++;
         }
+      } else if (q.type === 'sql') {
+        const studentQuery = codingAnswers[q.id] || '';
+        try {
+          const evalResult = await evaluateSQLQueryAI(q.text, q.explanation || q.correctAnswerText || '', studentQuery);
+          sqlFeedbackMap[q.id] = evalResult;
+          if (evalResult.isCorrect) {
+            correctCount++;
+          }
+        } catch (err) {
+          console.error(`Failed to evaluate SQL question ${q.id}:`, err);
+          const cleanStudent = studentQuery.trim().replace(/\s+/g, ' ').toLowerCase();
+          const cleanModel = (q.correctAnswerText || q.explanation || '').trim().replace(/\s+/g, ' ').toLowerCase();
+          const matches = cleanStudent === cleanModel;
+          sqlFeedbackMap[q.id] = {
+            score: matches ? 100 : 0,
+            isCorrect: matches,
+            feedback: "Offline evaluation fallback."
+          };
+          if (matches) {
+            correctCount++;
+          }
+        }
       }
-    });
+    }
+
+    setSqlFeedback(sqlFeedbackMap);
+    setTestSubmitted(true);
 
     const percentage = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
 
@@ -307,7 +914,7 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
       status: status || (terminatedRef.current ? 'terminated_cheating' : 'completed'),
       proctoringLogs: JSON.stringify(proctoringLogs),
       confidenceRatings: JSON.stringify(confidenceRatings),
-      studentAnswers: JSON.stringify({ selectedAnswers, codingAnswers })
+      studentAnswers: JSON.stringify({ selectedAnswers, codingAnswers, sqlFeedback: sqlFeedbackMap })
     };
 
     try {
@@ -317,6 +924,7 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
     }
 
     setTestResult(result);
+    setIsGrading(false);
   };
 
   const issueWarning = useCallback((reason: string, _type: ProctoringLog['type']) => {
@@ -356,6 +964,9 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
               }
               if (parsedAnswers.codingAnswers) {
                 setCodingAnswers(parsedAnswers.codingAnswers);
+              }
+              if (parsedAnswers.sqlFeedback) {
+                setSqlFeedback(parsedAnswers.sqlFeedback);
               }
             } catch (e) {
               console.error("Failed to parse student answers:", e);
@@ -857,6 +1468,26 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
     );
   }
 
+  // ─── Render: AI Grading Loader ───────────────────────────────────────────
+  if (isGrading) {
+    return (
+      <div className="min-h-screen bg-[#080d14] flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-6">
+          <div className="relative animate-pulse">
+            <div className="w-20 h-20 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto" />
+            <Brain className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-400" size={28} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-white">✨ CYNEX AI Grading System</h2>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest animate-pulse max-w-sm mx-auto leading-relaxed">
+              Evaluating query logic and semantic correctness against model answers...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ─── Render: Error ────────────────────────────────────────────────────────
   if (error) {
     return (
@@ -990,6 +1621,8 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
         const textAns = codingAnswers[q.id]?.trim().toLowerCase();
         const correctText = q.correctAnswerText?.trim().toLowerCase();
         isCorrect = (!!textAns && !!correctText && textAns === correctText);
+      } else if (q.type === 'sql') {
+        isCorrect = !!sqlFeedback[q.id]?.isCorrect;
       }
       return isCorrect && confidenceRatings[q.id] === 'confident';
     }).length;
@@ -1003,6 +1636,8 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
         const textAns = codingAnswers[q.id]?.trim().toLowerCase();
         const correctText = q.correctAnswerText?.trim().toLowerCase();
         isCorrect = (!!textAns && !!correctText && textAns === correctText);
+      } else if (q.type === 'sql') {
+        isCorrect = !!sqlFeedback[q.id]?.isCorrect;
       }
       return isCorrect && (confidenceRatings[q.id] === 'unsure' || confidenceRatings[q.id] === 'guess');
     }).length;
@@ -1016,6 +1651,8 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
         const textAns = codingAnswers[q.id]?.trim().toLowerCase();
         const correctText = q.correctAnswerText?.trim().toLowerCase();
         isCorrect = (!!textAns && !!correctText && textAns === correctText);
+      } else if (q.type === 'sql') {
+        isCorrect = !!sqlFeedback[q.id]?.isCorrect;
       }
       return !isCorrect && confidenceRatings[q.id] === 'confident';
     }).length;
@@ -1029,6 +1666,8 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
         const textAns = codingAnswers[q.id]?.trim().toLowerCase();
         const correctText = q.correctAnswerText?.trim().toLowerCase();
         isCorrect = (!!textAns && !!correctText && textAns === correctText);
+      } else if (q.type === 'sql') {
+        isCorrect = !!sqlFeedback[q.id]?.isCorrect;
       }
       return !isCorrect && (confidenceRatings[q.id] === 'unsure' || confidenceRatings[q.id] === 'guess');
     }).length;
@@ -1180,6 +1819,8 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
                     isCorrect = (selAnswer !== undefined && q.correctAnswer !== undefined && selAnswer === q.correctAnswer);
                   } else if (q.type === 'short-answer') {
                     isCorrect = (!!codeAns && q.correctAnswerText !== undefined && codeAns.trim().toLowerCase() === q.correctAnswerText.trim().toLowerCase());
+                  } else if (q.type === 'sql') {
+                    isCorrect = !!sqlFeedback[q.id]?.isCorrect;
                   }
 
                   const showExp = openExplanations.has(q.id);
@@ -1318,6 +1959,41 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
                         </div>
                       )}
 
+                      {/* SQL Questions */}
+                      {q.type === 'sql' && (
+                        <div className="text-xs space-y-3 bg-slate-950/40 p-4.5 rounded-xl border border-white/5 font-mono">
+                          <div>
+                            <span className="text-gray-500 font-bold block mb-1">Your Submitted SQL Query:</span>
+                            <pre className="p-3 bg-black/60 rounded border border-white/5 text-gray-300 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                              {codeAns || '-- No query submitted'}
+                            </pre>
+                          </div>
+                          <div>
+                            <span className="text-emerald-400 font-bold block mb-1">Model SQL Query / Intent:</span>
+                            <pre className="p-3 bg-black/40 rounded border border-emerald-500/10 text-emerald-300 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                              {q.correctAnswerText || q.explanation || '-- No model answer configured'}
+                            </pre>
+                          </div>
+                          
+                          {/* AI Grading Report */}
+                          {sqlFeedback[q.id] && (
+                            <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-2 mt-2 font-sans">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-black uppercase text-indigo-400 tracking-wider">🤖 CYNEX AI Grading Report</span>
+                                <span className={`text-xs font-black px-2 py-0.5 rounded ${
+                                  sqlFeedback[q.id].isCorrect ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                }`}>
+                                  Score: {sqlFeedback[q.id].score}/100
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-indigo-200 leading-relaxed font-medium">
+                                <span className="font-bold text-gray-300">Feedback:</span> {sqlFeedback[q.id].feedback}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Toggle Explanation Button */}
                       {q.explanation && (
                         <button
@@ -1420,7 +2096,7 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                  Question {currentIdx + 1} of {questions.length}
+Question {currentIdx + 1} of {questions.length}
                 </span>
                 {currentQ && (
                   <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md ${
@@ -1455,20 +2131,111 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
             </p>
 
             {currentQ?.type === 'coding' ? (
-              <div className="h-[400px] w-full rounded-xl overflow-hidden border border-white/10">
-                <Editor
-                  height="100%"
-                  defaultLanguage="javascript"
-                  theme="vs-dark"
-                  value={codingAnswers[currentQ.id] || currentQ.boilerplate || ''}
-                  onChange={(value) => setCodingAnswers(prev => ({ ...prev, [currentQ.id]: value || '' }))}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    wordWrap: 'on',
-                    padding: { top: 16 }
-                  }}
-                />
+              <CodeCompiler
+                questionId={currentQ.id}
+                value={codingAnswers[currentQ.id] || currentQ.boilerplate || ''}
+                onChange={(code) => setCodingAnswers(prev => ({ ...prev, [currentQ.id]: code }))}
+                questionLanguage={(currentQ as any).language || (currentQ as any).codeLanguage || ''}
+              />
+            ) : currentQ?.type === 'sql' ? (
+              <div className="space-y-4">
+                {/* SQL Info Banner */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
+                  <Database size={13} className="text-indigo-400 shrink-0" />
+                  <span className="text-[11px] text-indigo-300 font-medium">
+                    Seeded tables available: <code className="font-mono text-[#41c8df] bg-white/5 px-1.5 py-0.5 rounded mx-1">emp</code> and <code className="font-mono text-[#41c8df] bg-white/5 px-1.5 py-0.5 rounded">dept</code>
+                  </span>
+                </div>
+
+                {/* SQL Textarea Editor */}
+                <div className="relative">
+                  <textarea
+                    value={codingAnswers[currentQ.id] || ''}
+                    onChange={(e) => setCodingAnswers(prev => ({ ...prev, [currentQ.id]: e.target.value }))}
+                    placeholder={`-- Write your SQL query here\nSELECT ...`}
+                    rows={10}
+                    spellCheck={false}
+                    className="w-full px-5 py-4 bg-[#0d1521] border border-white/10 focus:border-[#41c8df] rounded-xl outline-none text-[#41c8df] font-mono text-sm placeholder-gray-600 resize-y leading-relaxed transition-colors"
+                    style={{ minHeight: '200px', fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace" }}
+                  />
+                </div>
+
+                {/* Controls */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={() => runSQLQuery(codingAnswers[currentQ.id] || '')}
+                    disabled={dbLoading}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#41c8df] to-[#9b5de5] hover:opacity-90 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer"
+                  >
+                    {dbLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                        Initializing DB...
+                      </>
+                    ) : (
+                      <>
+                        <Play size={14} className="fill-current" />
+                        Run Query
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setCodingAnswers(prev => ({ ...prev, [currentQ.id]: '' }))}
+                    className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                {/* Output Screen */}
+                {(queryResults || queryError) && (
+                  <div className="bg-[#0b0f19] border border-white/10 rounded-xl p-4 space-y-3 shadow-inner">
+                    <div className="flex items-center gap-2 text-gray-400 border-b border-white/5 pb-2">
+                      <Terminal size={14} className="text-gray-500" />
+                      <span className="text-[10px] font-black uppercase tracking-wider">Execution Output</span>
+                    </div>
+
+                    {queryError && (
+                      <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-lg text-red-300 text-xs leading-relaxed font-mono flex items-start gap-2.5">
+                        <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                        <span>{queryError}</span>
+                      </div>
+                    )}
+
+                    {queryResults && (
+                      <div className="overflow-x-auto max-h-60 scrollbar-thin">
+                        <table className="w-full text-left text-xs font-mono border-collapse">
+                          <thead>
+                            <tr className="border-b border-white/10 text-gray-400">
+                              {queryResults.columns.map((col, idx) => (
+                                <th key={idx} className="p-2 font-black uppercase text-[10px] tracking-wider bg-white/5">{col}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {queryResults.rows.length === 0 ? (
+                              <tr>
+                                <td colSpan={queryResults.columns.length || 1} className="p-4 text-center text-gray-500 italic">
+                                  No rows returned.
+                                </td>
+                              </tr>
+                            ) : (
+                              queryResults.rows.map((row, rowIdx) => (
+                                <tr key={rowIdx} className="border-b border-white/5 hover:bg-white/2 transition-colors">
+                                  {row.map((val, valIdx) => (
+                                    <td key={valIdx} className="p-2 text-gray-300">
+                                      {val === null ? <span className="text-gray-600 italic">NULL</span> : String(val)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : currentQ?.type === 'short-answer' ? (
               <div className="w-full">

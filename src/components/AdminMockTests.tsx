@@ -2,17 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, X, ClipboardList, AlertCircle, CheckCircle2,
-  Edit2, Trash2, Eye, EyeOff, HelpCircle, Download,
+  Edit2, Trash2, HelpCircle, Download,
   Upload, FileSpreadsheet, Clock, BookOpen, Layers,
-  ChevronRight, ArrowLeft, Sparkles, Globe, RefreshCw, Check,
-  Search, Copy, Link, Star, Wand2, FileText, ArrowRight,
-  Shield, AlertTriangle, TrendingUp, ThumbsUp, Activity, Award
+  ChevronRight, ArrowLeft, Sparkles, RefreshCw, Check,
+  Search, Copy, Link, Star, Wand2, FileText,
+  Shield, AlertTriangle, TrendingUp, Activity, Award
 } from 'lucide-react';
 import {
   getMockTests, createMockTest, deleteMockTest, updateMockTest,
   getQuestions, addQuestion, deleteQuestion, updateQuestion,
   getTestResults, getCourses, getBatches,
-  MockTest, Question, TestResult, Course, Batch
+  MockTest, Question, TestResult, Course, Batch, ProctoringLog
 } from '../lib/turso';
 import { generateMockTestQuestions, fixSpellingAndGrammar, translateQuestions, addAnswerExplanationsAI, makeSimple, changeQuestionFormat } from '../lib/gemini';
 
@@ -55,7 +55,7 @@ const AdminMockTests = () => {
   const [questionForm, setQuestionForm] = useState({
     text: '',
     difficulty: 'easy' as 'easy' | 'medium' | 'hard',
-    type: 'mcq' as 'mcq' | 'coding' | 'short-answer' | 'true-false',
+    type: 'mcq' as 'mcq' | 'coding' | 'short-answer' | 'true-false' | 'sql',
     options: ['', '', '', ''],
     correctAnswer: 0,
     correctAnswerText: '',
@@ -155,17 +155,7 @@ const AdminMockTests = () => {
     }
   };
 
-  const handleToggleActive = async (test: MockTest) => {
-    try {
-      const updatedTest = { ...test, isActive: !test.isActive };
-      await updateMockTest(updatedTest);
-      setTests(tests.map(t => t.id === test.id ? updatedTest : t));
-      setSuccess(`Test ${updatedTest.isActive ? 'activated' : 'deactivated'}`);
-      setTimeout(() => setSuccess(null), 3000);
-    } catch {
-      setError('Failed to toggle test visibility');
-    }
-  };
+
 
   const handleDeleteTest = async (id: string) => {
     if (!window.confirm('Delete this test and all its questions?')) return;
@@ -230,7 +220,8 @@ const AdminMockTests = () => {
         totalQuestions: generatedQs.length,
         isActive: true,
         course_id: cynexAiCourseId || undefined,
-        language: language
+        language: language,
+        createdAt: new Date().toISOString()
       };
 
       await createMockTest(newTest);
@@ -281,7 +272,7 @@ const AdminMockTests = () => {
           text: questionForm.text.trim(),
           options: questionForm.type === 'mcq' ? questionForm.options.filter(o => o.trim()) : undefined,
           correctAnswer: (questionForm.type === 'mcq' || questionForm.type === 'true-false') ? questionForm.correctAnswer : undefined,
-          correctAnswerText: questionForm.type === 'short-answer' ? questionForm.correctAnswerText.trim() : undefined,
+          correctAnswerText: (questionForm.type === 'short-answer' || questionForm.type === 'sql') ? questionForm.correctAnswerText.trim() : undefined,
           boilerplate: questionForm.type === 'coding' ? questionForm.boilerplate : undefined,
           testCases: questionForm.type === 'coding' ? questionForm.testCases : undefined,
           difficulty: questionForm.difficulty,
@@ -299,7 +290,7 @@ const AdminMockTests = () => {
           text: questionForm.text.trim(),
           options: questionForm.type === 'mcq' ? questionForm.options.filter(o => o.trim()) : undefined,
           correctAnswer: (questionForm.type === 'mcq' || questionForm.type === 'true-false') ? questionForm.correctAnswer : undefined,
-          correctAnswerText: questionForm.type === 'short-answer' ? questionForm.correctAnswerText.trim() : undefined,
+          correctAnswerText: (questionForm.type === 'short-answer' || questionForm.type === 'sql') ? questionForm.correctAnswerText.trim() : undefined,
           boilerplate: questionForm.type === 'coding' ? questionForm.boilerplate : undefined,
           testCases: questionForm.type === 'coding' ? questionForm.testCases : undefined,
           difficulty: questionForm.difficulty,
@@ -622,24 +613,7 @@ const AdminMockTests = () => {
     document.body.removeChild(link);
   };
 
-  const handleDownloadTests = () => {
-    const data = tests.map(t => {
-      const course = courses.find(c => c.id === t.course_id);
-      const batch = batches.find(b => b.id === t.batch_id);
-      return {
-        ID: t.id,
-        Title: t.title,
-        Description: t.description,
-        DurationMinutes: t.duration,
-        Category: t.category,
-        TotalQuestions: t.totalQuestions,
-        IsActive: t.isActive ? 'Yes' : 'No',
-        Course: course ? course.title : 'General',
-        Batch: batch ? batch.name : 'All Batches'
-      };
-    });
-    exportToCSV(data, 'mock_tests_list.csv', ['Test ID', 'Title', 'Description', 'Duration (Min)', 'Category', 'Total Questions', 'Active', 'Course', 'Batch/Section']);
-  };
+
 
   const handleDownloadQuestions = () => {
     const activeTest = tests.find(t => t.id === selectedTestId);
@@ -1287,7 +1261,10 @@ const AdminMockTests = () => {
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-black text-gray-400 uppercase tracking-widest bg-white/5 px-2.5 py-0.5 rounded-md border border-white/5">Q. {i + 1}</span>
                               <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-[#41c8df]/10 text-[#41c8df]">
-                                {q.type === 'mcq' ? 'MULTIPLE CHOICE' : 'CODING'}
+                                {q.type === 'mcq' ? 'MULTIPLE CHOICE' :
+                                 q.type === 'coding' ? 'CODING' :
+                                 q.type === 'sql' ? 'SQL QUERY' :
+                                 q.type === 'true-false' ? 'TRUE/FALSE' : 'SHORT ANSWER'}
                               </span>
                               <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md ${
                                 q.difficulty === 'easy' ? 'bg-emerald-500/10 text-emerald-400' :
@@ -1695,6 +1672,7 @@ const AdminMockTests = () => {
                       title="Question Type">
                       <option value="mcq">MCQ</option>
                       <option value="coding">Coding</option>
+                      <option value="sql">SQL Query</option>
                       <option value="short-answer">Short Answer</option>
                       <option value="true-false">True/False</option>
                     </select>
@@ -1759,13 +1737,22 @@ const AdminMockTests = () => {
                   </div>
                 )}
 
-                {questionForm.type === 'short-answer' && (
+                {(questionForm.type === 'short-answer' || questionForm.type === 'sql') && (
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Correct Answer Text</label>
-                    <input type="text" value={questionForm.correctAnswerText}
-                      onChange={(e) => setQuestionForm({ ...questionForm, correctAnswerText: e.target.value })}
-                      className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
-                      placeholder="Exact answer expected" />
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+                      {questionForm.type === 'sql' ? 'Correct SQL Query (Model Answer)' : 'Correct Answer Text'}
+                    </label>
+                    {questionForm.type === 'sql' ? (
+                      <textarea rows={3} value={questionForm.correctAnswerText}
+                        onChange={(e) => setQuestionForm({ ...questionForm, correctAnswerText: e.target.value })}
+                        className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary font-mono text-sm"
+                        placeholder="SELECT * FROM emp WHERE sal > 2000;" />
+                    ) : (
+                      <input type="text" value={questionForm.correctAnswerText}
+                        onChange={(e) => setQuestionForm({ ...questionForm, correctAnswerText: e.target.value })}
+                        className="w-full px-4 py-3 bg-secondary/5 border border-secondary/10 focus:border-[#41c8df] rounded-xl outline-none text-secondary"
+                        placeholder="Exact answer expected" />
+                    )}
                   </div>
                 )}
 
@@ -1801,6 +1788,9 @@ const AdminMockTests = () => {
                           type: 'mcq',
                           options: ['', '', '', ''],
                           correctAnswer: 0,
+                          correctAnswerText: '',
+                          boilerplate: '',
+                          testCases: '',
                           explanation: ''
                         });
                         setIsQuestionModalOpen(true);

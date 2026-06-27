@@ -57,6 +57,15 @@ router.post('/student/login', async (req, res) => {
     }
 
     const user = rows[0];
+
+    const { pushToGoogleSheet } = require('../lib/googleSheetsSync');
+    pushToGoogleSheet('STUDENT_LOGIN', {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+
     const token = signToken({ id: user.id, name: user.name, email: user.email, role: user.role });
     return res.json({ token, user });
   } catch (err) {
@@ -87,6 +96,12 @@ router.post('/admin/login', async (req, res) => {
 
     // Successful login – clear rate-limit counter for this IP
     resetAdminRateLimit(ip);
+
+    const { pushToGoogleSheet } = require('../lib/googleSheetsSync');
+    pushToGoogleSheet('ADMIN_LOGIN', {
+      ip,
+      timestamp: new Date().toISOString()
+    });
 
     const token = signToken({ id: 'admin', role: 'admin' }, '24h');
     return res.json({ token });

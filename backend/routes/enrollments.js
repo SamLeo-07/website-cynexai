@@ -55,6 +55,15 @@ router.post('/', requireAuth, async (req, res) => {
       ]
     );
 
+    const { pushToGoogleSheet } = require('../lib/googleSheetsSync');
+    pushToGoogleSheet('ENROLLMENT', {
+      enrollmentId: id,
+      studentId: student_id,
+      courseId: course_id,
+      status: status || 'active',
+      progress: progress_percentage != null ? progress_percentage : 0
+    });
+
     return res.status(201).json({ success: true, id });
   } catch (err) {
     return res.status(500).json({ error: err.message });

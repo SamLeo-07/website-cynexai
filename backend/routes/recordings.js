@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { GoogleAIFileManager } = require('@google/genai/server');
+const { GoogleAIFileManager } = require('@google/generative-ai/server');
 
 // ─── Batches ──────────────────────────────────────────────────────────────────
 

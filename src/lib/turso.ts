@@ -131,6 +131,11 @@ export interface User {
   batch_id?: string;
   photo_url?: string;
 }
+export interface ProctoringLog {
+  timestamp: string;
+  type: 'head_moved' | 'tab_switch' | 'camera_denied' | 'mobile_detected' | 'multiple_faces' | 'fullscreen_exit' | 'shortcut_blocked' | 'devtools_detected' | 'no_face';
+  detail: string;
+}
 
 export interface Batch {
   id: string;
@@ -222,7 +227,9 @@ export const getUsers = async (): Promise<User[]> => {
   if (isTursoConfigured && client) {
     try {
       const result = await client.execute("SELECT * FROM users ORDER BY created_at DESC");
-      return result.rows as unknown as User[];
+      if (result.rows.length > 0) {
+        return result.rows as unknown as User[];
+      }
     } catch (e) {
       console.error("Deepmind: Failed to fetch users", e);
     }
@@ -236,6 +243,7 @@ export const getUsers = async (): Promise<User[]> => {
         id: 'demo-student-id',
         name: 'Demo Student',
         email: 'student@cynexai.com',
+        password_hash: 'student123',
         role: 'student',
         batch_id: 'batch_demo'
       };
@@ -1015,7 +1023,7 @@ export interface Question {
   options?: string[]; // Optional for coding questions
   correctAnswer?: number; // Optional for coding questions (index)
   difficulty: 'easy' | 'medium' | 'hard';
-  type: 'mcq' | 'coding' | 'short-answer' | 'true-false';
+  type: 'mcq' | 'coding' | 'short-answer' | 'true-false' | 'sql';
   sampleInput?: string;
   sampleOutput?: string;
   explanation?: string;
@@ -1472,6 +1480,16 @@ const seedLocalMockTests = () => {
         type: 'mcq',
         explanation: 'Dropout is a regularization technique where randomly selected neurons are ignored during training, reducing co-dependency.',
         isApproved: true
+      },
+      {
+        id: 'q_ds_sql_1',
+        testId: 'ds_certification_test',
+        text: 'Retrieve all employees from the SALES department using the emp and dept tables. Order by empno.',
+        sqlAnswer: 'SELECT emp.* FROM emp JOIN dept ON emp.deptno = dept.deptno WHERE dname = \'SALES\' ORDER BY empno;',
+        difficulty: 'hard',
+        type: 'sql',
+        explanation: 'Join emp and dept on deptno and filter by dname = SALES.',
+        isApproved: true
       }
     ];
 
@@ -1488,19 +1506,21 @@ export const getMockTests = async (): Promise<MockTest[]> => {
     try {
       await initTursoDB();
       const result = await client.execute("SELECT * FROM mock_tests ORDER BY createdAt DESC");
-      return result.rows.map((row: any) => ({
-        id: row.id as string,
-        title: row.title as string,
-        description: row.description as string,
-        duration: Number(row.duration),
-        category: row.category as string,
-        totalQuestions: Number(row.totalQuestions),
-        isActive: row.isActive === 1,
-        createdAt: row.createdAt as string,
-        course_id: row.course_id as string || undefined,
-        batch_id: row.batch_id as string || undefined,
-        language: row.language as string || 'English'
-      }));
+      if (result.rows.length > 0) {
+        return result.rows.map((row: any) => ({
+          id: row.id as string,
+          title: row.title as string,
+          description: row.description as string,
+          duration: Number(row.duration),
+          category: row.category as string,
+          totalQuestions: Number(row.totalQuestions),
+          isActive: row.isActive === 1,
+          createdAt: row.createdAt as string,
+          course_id: row.course_id as string || undefined,
+          batch_id: row.batch_id as string || undefined,
+          language: row.language as string || 'English'
+        }));
+      }
     } catch (e) {
       console.error("Failed to get mock tests from Turso:", e);
     }
@@ -1533,28 +1553,29 @@ export const getQuestions = async (testId: string, includeUnapproved: boolean = 
       }
 
       const result = await client.execute({ sql, args });
-      return result.rows.map((row: any) => ({
-        id: row.id as string,
-        testId: row.testId as string,
-        text: row.text as string,
-        options: row.options ? safelyParseJSON(row.options as string) : undefined,
-        correctAnswer: row.correctAnswer !== null ? Number(row.correctAnswer) : undefined,
-        difficulty: (row.difficulty as string || 'easy') as 'easy' | 'medium' | 'hard',
-        type: (row.type as string || 'mcq') as 'mcq' | 'coding',
-        sampleInput: row.sampleInput as string | undefined,
-        sampleOutput: row.sampleOutput as string | undefined,
-        explanation: row.explanation as string | undefined,
-        isApproved: row.isApproved === 1,
-        aiMetadata: row.aiMetadata ? safelyParseJSON(row.aiMetadata as string) : undefined,
-        testCases: row.testCases as string | undefined,
-        boilerplate: row.boilerplate as string | undefined,
-        inputFormat: row.inputFormat as string | undefined,
-        outputFormat: row.outputFormat as string | undefined,
-        constraints: row.constraints as string | undefined
-      }));
+      if (result.rows.length > 0) {
+        return result.rows.map((row: any) => ({
+          id: row.id as string,
+          testId: row.testId as string,
+          text: row.text as string,
+          options: row.options ? safelyParseJSON(row.options as string) : undefined,
+          correctAnswer: row.correctAnswer !== null ? Number(row.correctAnswer) : undefined,
+          difficulty: (row.difficulty as string || 'easy') as 'easy' | 'medium' | 'hard',
+          type: (row.type as string || 'mcq') as Question['type'],
+          sampleInput: row.sampleInput as string | undefined,
+          sampleOutput: row.sampleOutput as string | undefined,
+          explanation: row.explanation as string | undefined,
+          isApproved: row.isApproved === 1,
+          aiMetadata: row.aiMetadata ? safelyParseJSON(row.aiMetadata as string) : undefined,
+          testCases: row.testCases as string | undefined,
+          boilerplate: row.boilerplate as string | undefined,
+          inputFormat: row.inputFormat as string | undefined,
+          outputFormat: row.outputFormat as string | undefined,
+          constraints: row.constraints as string | undefined
+        }));
+      }
     } catch (e) {
       console.error("Failed to get questions from Turso:", e);
-      return [];
     }
   }
 
