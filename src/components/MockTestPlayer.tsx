@@ -591,13 +591,13 @@ const WarningOverlay: React.FC<{
         <ShieldAlert size={40} className="text-red-400" />
       </div>
       <h2 className="text-2xl font-black text-red-400 mb-2">
-        ⚠ Warning {warningCount} of 3
+        ⚠ Warning {warningCount} of 10
       </h2>
       <p className="text-gray-300 text-sm mb-4 leading-relaxed">{reason}</p>
       <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-        {warningCount < 3 ? (
+        {warningCount < 10 ? (
           <p className="text-xs text-red-300 font-medium">
-            You have <span className="font-black text-red-400">{3 - warningCount}</span> warning(s) remaining. A 4th violation will <span className="font-black">automatically submit</span> your test.
+            You have <span className="font-black text-red-400">{10 - warningCount}</span> warning(s) remaining. An 11th violation will <span className="font-black">automatically submit</span> your test.
           </p>
         ) : (
           <p className="text-xs text-red-400 font-black">
@@ -932,10 +932,10 @@ const MockTestPlayer: React.FC<MockTestPlayerProps> = ({ inlineTestId, onComplet
 
     const newWarningCount = warningRef.current + 1;
 
-    if (newWarningCount >= 4) {
+    if (newWarningCount >= 11) {
       // Auto-terminate
       setTerminated(true);
-      const msg = 'Test auto-submitted: You received 4 proctoring violations.';
+      const msg = 'Test auto-submitted: You received 11 proctoring violations.';
       setTerminationReason(msg);
       handleSubmit(true, 'terminated_cheating');
       return;

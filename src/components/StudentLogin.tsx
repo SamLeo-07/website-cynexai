@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff, X, Phone, Clock, Send, CheckCircle, User } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff, X, Phone, Clock, Send, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { createSupportTicket, getUsers } from '../lib/turso';
+import { createSupportTicket, getUsers, updateUserOnlineStatus, getActiveSessions, createSession } from '../lib/turso';
 
 const StudentLogin = () => {
   const [email, setEmail] = useState('');
@@ -31,9 +31,22 @@ const StudentLogin = () => {
       const user = users.find(u => u.email === email && u.password_hash === password);
 
       if (user) {
+        const activeSessions = await getActiveSessions(user.id);
+        if (activeSessions.length >= 5) {
+          setError('Maximum device limit (5) reached. Please log out from another device.');
+          setLoading(false);
+          return;
+        }
+
+        const sessionId = crypto.randomUUID();
+        await createSession(user.id, sessionId);
+        localStorage.setItem('cynexai_session_id', sessionId);
+
         localStorage.setItem('cynexai_student_auth', 'true');
         localStorage.setItem('cynexai_student_id', user.id);
         localStorage.setItem('cynexai_student_name', user.name || user.email || 'Student');
+        
+        await updateUserOnlineStatus(user.id, true);
         
         navigate('/portal');
       } else {

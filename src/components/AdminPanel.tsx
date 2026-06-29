@@ -89,7 +89,7 @@ import {
 } from '../lib/turso';
 import { advancedAiPosts } from '../data/aiPosts';
 import AdminLogin from './AdminLogin';
-import { BookOpen, PlusCircle, Clock, Award, Terminal, HelpCircle, Video, ClipboardList, Trophy, Menu, Briefcase, ChevronDown, ChevronUp, Link2, Activity, Sparkles, Lock, RefreshCw, Square, Check, Users, ArrowUp, ArrowDown } from 'lucide-react';
+import { BookOpen, PlusCircle, Clock, Award, Terminal, HelpCircle, Video, ClipboardList, Trophy, Menu, Briefcase, ChevronDown, ChevronUp, Link2, Activity, Sparkles, Lock, RefreshCw, Square, Check, Users, ArrowUp, ArrowDown, Gift, Brain } from 'lucide-react';
 import { AdminAttendance } from './AdminAttendance';
 import { AdminCertificates } from './AdminCertificates';
 import { AdminDoubtWall } from './AdminDoubtWall';
@@ -100,6 +100,9 @@ import AdminMockTests from './AdminMockTests';
 import { AdminLeaderboard } from './AdminLeaderboard';
 import { AdminCourseManager } from './AdminCourseManager';
 import { AdminProjectSubmissions } from './AdminProjectSubmissions';
+import AdminLiveActivity from './AdminLiveActivity';
+import AdminReferrals from './AdminReferrals';
+import AdminDailyQuiz from './AdminDailyQuiz';
 
 // Admin password is loaded exclusively from environment variable.
 // If not set, access is blocked to prevent accidental exposure.
@@ -121,7 +124,7 @@ export const safeParseArr = (v?: string | string[] | any): string[] => {
 };
 
 const AdminPanel = () => {
-  const [activeTab, setActiveTab] = useState<'articles' | 'courses' | 'coursemanager' | 'students' | 'tickets' | 'reviews' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'faqs' | 'recordings' | 'mocktests' | 'leaderboard' | 'projects'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'courses' | 'coursemanager' | 'students' | 'tickets' | 'reviews' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'faqs' | 'recordings' | 'mocktests' | 'leaderboard' | 'projects' | 'live_activity' | 'referrals' | 'dailyquiz'>('articles');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Batches State
@@ -1521,10 +1524,13 @@ const AdminPanel = () => {
             { id: 'articles', label: 'Articles', Icon: FileText },
             { id: 'courses', label: 'Courses', Icon: BookOpen },
             { id: 'coursemanager', label: 'Course Manager', Icon: BookOpen },
+            { id: 'live_activity', label: 'Live Activity', Icon: Activity },
             { id: 'students', label: 'Students', Icon: ShieldCheck },
             { id: 'tickets', label: 'Support', Icon: MessageSquare },
             { id: 'reviews', label: 'Reviews', Icon: Star },
             { id: 'leaderboard', label: 'Leaderboard', Icon: Trophy },
+            { id: 'referrals', label: 'Referrals', Icon: Gift },
+            { id: 'dailyquiz', label: 'Daily Quiz', Icon: Brain },
             { id: 'attendance', label: 'Attendance', Icon: Clock },
             { id: 'certificates', label: 'Certs', Icon: Award },
             { id: 'doubts', label: 'Doubts', Icon: MessageSquare },
@@ -2355,10 +2361,16 @@ const AdminPanel = () => {
               <AdminRecordings />
             ) : activeTab === 'mocktests' ? (
               <AdminMockTests />
+            ) : activeTab === 'live_activity' ? (
+              <AdminLiveActivity />
             ) : activeTab === 'projects' ? (
               <AdminProjectSubmissions />
             ) : activeTab === 'leaderboard' ? (
               <AdminLeaderboard />
+            ) : activeTab === 'referrals' ? (
+              <div className="bg-white rounded-xl p-6 text-slate-800"><AdminReferrals /></div>
+            ) : activeTab === 'dailyquiz' ? (
+              <div className="bg-white rounded-xl p-6 text-slate-800"><AdminDailyQuiz /></div>
             ) : null}
           </div>
         )}

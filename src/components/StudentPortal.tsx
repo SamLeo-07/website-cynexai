@@ -5,8 +5,8 @@ import {
   Info, CheckCircle2, 
   LayoutDashboard,
   Trophy, Plus, X, Send,
-  MessageSquare, Terminal, Award,
-  Video, FileText, User as UserIcon, Briefcase, Globe
+  MessageSquare, Terminal, Award, Gift, Brain,
+  Video, FileText, User as UserIcon, Briefcase, Globe, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -16,6 +16,7 @@ import {
   getStudentChecklist, updateChecklistStep,
   getSupportReplies, createSupportReply,
   getBadges, getUsers, getBatches, getMockTests,
+  updateUserOnlineStatus, deleteSession,
   Course, Enrollment, SupportTicket, Lesson, OnboardingStep, SupportReply, Badge, Batch, MockTest
 } from '../lib/turso';
 import StudentDashboard from './StudentDashboard';
@@ -30,10 +31,13 @@ import { StudentMockTests } from './StudentMockTests';
 import { StudentProfile } from './StudentProfile';
 import { ProjectSubmissions } from './ProjectSubmissions';
 import { GlobalLeaderboard } from './GlobalLeaderboard';
+import ReferralDashboard from './ReferralDashboard';
+import DailyQuiz from './DailyQuiz';
+import ScrollingBanner from './ScrollingBanner';
 
 const StudentPortal = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'achievements' | 'support' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'recordings' | 'mocktests' | 'profile' | 'projects' | 'leaderboard'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'referral' | 'quiz' | 'dashboard' | 'courses' | 'achievements' | 'support' | 'attendance' | 'certificates' | 'doubts' | 'coding' | 'recordings' | 'mocktests' | 'profile' | 'projects' | 'leaderboard'>('referral');
   const [studentName, setStudentName] = useState('');
   const [studentId, setStudentId] = useState('');
   const [studentBatchId, setStudentBatchId] = useState('');
@@ -56,9 +60,12 @@ const StudentPortal = () => {
   // Content Player State
   const [selectedCourseData, setSelectedCourseData] = useState<{ course: Course; enrollment: Enrollment; lessons: Lesson[] } | null>(null);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+  const [isProfileComplete, setIsProfileComplete] = useState(true);
 
   const navItems = [
+    { id: 'referral', label: 'Referral Program', icon: Gift },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'quiz', label: 'Daily Quiz', icon: Brain },
     { id: 'profile', label: 'My Profile', icon: UserIcon },
     { id: 'courses', label: 'My Courses', icon: BookOpen },
     { id: 'recordings', label: 'Class Recordings', icon: Video },
@@ -104,8 +111,15 @@ const StudentPortal = () => {
         setMockTests(allMockTests);
 
         const currentUser = allUsers.find(u => u.id === id);
-        if (currentUser && currentUser.batch_id) {
-          setStudentBatchId(currentUser.batch_id);
+        if (currentUser) {
+          if (currentUser.batch_id) {
+            setStudentBatchId(currentUser.batch_id);
+          }
+          const complete = !!currentUser.phone;
+          setIsProfileComplete(complete);
+          if (!complete) {
+            setActiveTab('profile');
+          }
         }
 
         const enriched = studentEnrollments.map(enr => {
@@ -143,10 +157,19 @@ const StudentPortal = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const studentId = localStorage.getItem('cynexai_student_id');
+    const sessionId = localStorage.getItem('cynexai_session_id');
+    if (studentId) {
+      updateUserOnlineStatus(studentId, false).catch(console.error);
+    }
+    if (sessionId) {
+      await deleteSession(sessionId).catch(console.error);
+    }
     localStorage.removeItem('cynexai_student_auth');
     localStorage.removeItem('cynexai_student_id');
     localStorage.removeItem('cynexai_student_name');
+    localStorage.removeItem('cynexai_session_id');
     navigate('/login');
   };
 
@@ -229,20 +252,32 @@ const StudentPortal = () => {
         </div>
 
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto no-scrollbar">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
-              className={`w-full flex items-center gap-4 px-5 py-2.5 rounded-lg font-semibold transition-all text-sm ${
-                activeTab === item.id 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <item.icon className="w-4.5 h-4.5 shrink-0" />
-              {item.label}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isDisabled = !isProfileComplete && item.id !== 'profile';
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (isDisabled) {
+                    alert("Please update your profile details (phone number) to access this section.");
+                    return;
+                  }
+                  setActiveTab(item.id as any);
+                }}
+                className={`w-full flex items-center gap-4 px-5 py-2.5 rounded-lg font-semibold transition-all text-sm ${
+                  activeTab === item.id 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
+                    : isDisabled
+                      ? 'text-slate-400 cursor-not-allowed opacity-50'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <item.icon className="w-4.5 h-4.5 shrink-0" />
+                {item.label}
+                {isDisabled && <Lock className="w-3 h-3 ml-auto opacity-50" />}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="px-4 mt-auto">
@@ -258,6 +293,19 @@ const StudentPortal = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden pt-28 lg:pt-24 pb-24 lg:pb-12 px-3 sm:px-6 lg:px-12 relative bg-white">
+        
+        {/* Scrolling Banner */}
+        <div className="absolute top-0 left-0 right-0 z-30">
+          <ScrollingBanner 
+            messages={[
+              { text: "Ramesh just earned Wireless Earpods by referring 5 people!", icon: "gift" },
+              { text: "Priya unlocked an Amazon Gift Voucher!", icon: "award" },
+              { text: "Vikram received the Official CynexAI T-Shirt!", icon: "trophy" },
+              { text: "Suresh just completed the 3 Admissions milestone!", icon: "gift" }
+            ]}
+          />
+        </div>
+
         {/* Mobile Top Bar (only visible on mobile) */}
         <div className="lg:hidden fixed top-14 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200 px-4 py-2 flex items-center justify-between shadow-sm">
           <div>
@@ -275,21 +323,31 @@ const StudentPortal = () => {
           {/* Bottom Navigation for Mobile — horizontally scrollable so all 11 tabs fit */}
           <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 pb-safe rounded-t-xl shadow-lg">
             <div className="flex overflow-x-auto no-scrollbar items-center h-16 gap-1 px-2">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id as any)}
-                  className={`flex flex-col items-center justify-center gap-0.5 flex-shrink-0 px-3 h-full transition-all ${
-                    activeTab === item.id ? 'text-indigo-600' : 'text-slate-400'
-                  }`}
-                  title={item.label}
-                >
-                  <div className={`p-1.5 rounded-md transition-all ${activeTab === item.id ? 'bg-indigo-50' : ''}`}>
-                    <item.icon className="w-4.5 h-4.5" />
-                  </div>
-                  <span className="text-[9px] font-black uppercase tracking-tighter whitespace-nowrap">{item.label.split(' ')[0]}</span>
-                </button>
-              ))}
+              {navItems.map((item) => {
+                const isDisabled = !isProfileComplete && item.id !== 'profile';
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (isDisabled) {
+                        alert("Please update your profile details (phone number) to access this section.");
+                        return;
+                      }
+                      setActiveTab(item.id as any);
+                    }}
+                    className={`flex flex-col items-center justify-center gap-0.5 flex-shrink-0 px-3 h-full transition-all relative ${
+                      activeTab === item.id ? 'text-indigo-600' : isDisabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400'
+                    }`}
+                    title={item.label}
+                  >
+                    <div className={`p-1.5 rounded-md transition-all ${activeTab === item.id ? 'bg-indigo-50' : ''}`}>
+                      <item.icon className="w-4.5 h-4.5" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-tighter whitespace-nowrap">{item.label.split(' ')[0]}</span>
+                    {isDisabled && <Lock className="w-2.5 h-2.5 absolute top-2 right-2 text-slate-300 opacity-50" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -318,6 +376,28 @@ const StudentPortal = () => {
                     onNavigate={setActiveTab}
                     onPlayCourse={handleResume}
                   />
+                </motion.div>
+              )}
+
+              {activeTab === 'referral' && (
+                <motion.div
+                  key="referral"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <ReferralDashboard studentId={studentId} studentName={studentName} />
+                </motion.div>
+              )}
+
+              {activeTab === 'quiz' && (
+                <motion.div
+                  key="quiz"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <DailyQuiz studentId={studentId} />
                 </motion.div>
               )}
 
@@ -565,7 +645,10 @@ const StudentPortal = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                 >
-                  <StudentProfile studentId={studentId} />
+                  <StudentProfile 
+                    studentId={studentId} 
+                    onProfileUpdated={() => setIsProfileComplete(true)}
+                  />
                 </motion.div>
               )}
 

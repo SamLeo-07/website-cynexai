@@ -130,11 +130,20 @@ export interface User {
   created_at?: string;
   batch_id?: string;
   photo_url?: string;
+  is_online?: number;
+  last_login?: string;
+  last_logout?: string;
 }
 export interface ProctoringLog {
   timestamp: string;
   type: 'head_moved' | 'tab_switch' | 'camera_denied' | 'mobile_detected' | 'multiple_faces' | 'fullscreen_exit' | 'shortcut_blocked' | 'devtools_detected' | 'no_face';
   detail: string;
+}
+
+export interface UserSession {
+  session_id: string;
+  student_id: string;
+  created_at: string;
 }
 
 export interface Batch {
@@ -222,6 +231,7 @@ export interface Review {
 
 const USERS_LOCAL_KEY = 'cynexai_local_users';
 const ENROLLMENTS_LOCAL_KEY = 'cynexai_local_enrollments';
+const SESSIONS_LOCAL_KEY = 'cynexai_local_user_sessions';
 
 export const getUsers = async (): Promise<User[]> => {
   if (isTursoConfigured && client) {
@@ -266,6 +276,96 @@ export const getUsers = async (): Promise<User[]> => {
     return users;
   } catch {
     return [];
+  }
+};
+
+export const updateUserOnlineStatus = async (id: string, isOnline: boolean) => {
+  const timestamp = new Date().toISOString();
+  if (isTursoConfigured && client) {
+    try {
+      if (isOnline) {
+        await client.execute({
+          sql: "UPDATE users SET is_online = 1, last_login = ? WHERE id = ?",
+          args: [timestamp, id]
+        });
+      } else {
+        await client.execute({
+          sql: "UPDATE users SET is_online = 0, last_logout = ? WHERE id = ?",
+          args: [timestamp, id]
+        });
+      }
+      return;
+    } catch (e) {
+      console.error("Deepmind: Failed to update user online status in Turso", e);
+    }
+  }
+  const users = await getUsers();
+  const index = users.findIndex(u => u.id === id);
+  if (index !== -1) {
+    users[index] = { 
+      ...users[index], 
+      is_online: isOnline ? 1 : 0,
+      ...(isOnline ? { last_login: timestamp } : { last_logout: timestamp })
+    };
+    localStorage.setItem(USERS_LOCAL_KEY, JSON.stringify(users));
+  }
+};
+
+export const getActiveSessions = async (studentId: string): Promise<UserSession[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const res = await client.execute({
+        sql: "SELECT * FROM user_sessions WHERE student_id = ?",
+        args: [studentId]
+      });
+      return res.rows as unknown as UserSession[];
+    } catch (e) {
+      console.error("Deepmind: Failed to fetch sessions in Turso", e);
+    }
+  }
+  const local = localStorage.getItem(SESSIONS_LOCAL_KEY);
+  const sessions: UserSession[] = local ? JSON.parse(local) : [];
+  return sessions.filter(s => s.student_id === studentId);
+};
+
+export const createSession = async (studentId: string, sessionId: string) => {
+  const timestamp = new Date().toISOString();
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "INSERT INTO user_sessions (session_id, student_id, created_at) VALUES (?, ?, ?)",
+        args: [sessionId, studentId, timestamp]
+      });
+      localStorage.removeItem(SESSIONS_LOCAL_KEY);
+      return;
+    } catch (e) {
+      console.error("Deepmind: Failed to create session in Turso", e);
+    }
+  }
+  const local = localStorage.getItem(SESSIONS_LOCAL_KEY);
+  const sessions: UserSession[] = local ? JSON.parse(local) : [];
+  sessions.push({ session_id: sessionId, student_id: studentId, created_at: timestamp });
+  localStorage.setItem(SESSIONS_LOCAL_KEY, JSON.stringify(sessions));
+};
+
+export const deleteSession = async (sessionId: string) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "DELETE FROM user_sessions WHERE session_id = ?",
+        args: [sessionId]
+      });
+      localStorage.removeItem(SESSIONS_LOCAL_KEY);
+      return;
+    } catch (e) {
+      console.error("Deepmind: Failed to delete session in Turso", e);
+    }
+  }
+  const local = localStorage.getItem(SESSIONS_LOCAL_KEY);
+  if (local) {
+    let sessions: UserSession[] = JSON.parse(local);
+    sessions = sessions.filter(s => s.session_id !== sessionId);
+    localStorage.setItem(SESSIONS_LOCAL_KEY, JSON.stringify(sessions));
   }
 };
 
@@ -1853,6 +1953,7 @@ export interface TestResult {
   proctoringLogs?: string;
   confidenceRatings?: string;
   studentAnswers?: string;
+  ranking?: string | number;
 }
 
 const TEST_RESULTS_KEY = 'cynexai_test_results';
@@ -1890,6 +1991,26 @@ export const deleteMockTest = async (id: string) => {
   }
 };
 
+export const updateTestResultRanking = async (id: string, ranking: string | number) => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "UPDATE test_results SET ranking = ? WHERE id = ?",
+        args: [ranking, id]
+      });
+      return;
+    } catch (e) {
+      console.error("Failed to update test result ranking in Turso:", e);
+    }
+  }
+  const results = JSON.parse(localStorage.getItem(TEST_RESULTS_KEY) || '[]');
+  const index = results.findIndex((r: any) => r.id === id);
+  if (index !== -1) {
+    results[index].ranking = ranking;
+    localStorage.setItem(TEST_RESULTS_KEY, JSON.stringify(results));
+  }
+};
+
 export const createTestResult = async (result: TestResult) => {
   if (isTursoConfigured && client) {
     try {
@@ -1916,6 +2037,9 @@ export const createTestResult = async (result: TestResult) => {
           result.studentAnswers || null
         ]
       });
+      if (result.ranking !== undefined) {
+        await updateTestResultRanking(result.id, result.ranking);
+      }
       return;
     } catch (e) {
       console.error("Failed to save test result in Turso:", e);
@@ -1946,7 +2070,8 @@ export const getTestResults = async (): Promise<TestResult[]> => {
         status: row.status as any || 'completed',
         proctoringLogs: row.proctoringLogs as string || undefined,
         confidenceRatings: row.confidenceRatings as string || undefined,
-        studentAnswers: row.studentAnswers as string || undefined
+        studentAnswers: row.studentAnswers as string || undefined,
+        ranking: row.ranking as string | number | undefined
       }));
     } catch (e) {
       console.error("Failed to get test results from Turso:", e);
@@ -3179,9 +3304,27 @@ export const initTursoDB = async () => {
           totalQuestions INTEGER,
           percentage REAL,
           date TEXT,
-          studentAnswers TEXT
+          studentId TEXT,
+          warnings INTEGER,
+          timeTaken INTEGER,
+          status TEXT,
+          proctoringLogs TEXT,
+          confidenceRatings TEXT,
+          studentAnswers TEXT,
+          ranking TEXT
         )
       `);
+      try {
+        await client.execute("ALTER TABLE test_results ADD COLUMN studentId TEXT");
+        await client.execute("ALTER TABLE test_results ADD COLUMN warnings INTEGER");
+        await client.execute("ALTER TABLE test_results ADD COLUMN timeTaken INTEGER");
+        await client.execute("ALTER TABLE test_results ADD COLUMN status TEXT");
+        await client.execute("ALTER TABLE test_results ADD COLUMN proctoringLogs TEXT");
+        await client.execute("ALTER TABLE test_results ADD COLUMN confidenceRatings TEXT");
+        await client.execute("ALTER TABLE test_results ADD COLUMN ranking TEXT");
+      } catch (e) {
+        // Ignore if columns already exist
+      }
 
       await client.execute(`
         CREATE TABLE IF NOT EXISTS courses (
@@ -3214,9 +3357,27 @@ export const initTursoDB = async () => {
           password_hash TEXT NOT NULL,
           phone TEXT,
           role TEXT DEFAULT 'student',
-          created_at TEXT
+          created_at TEXT,
+          is_online INTEGER DEFAULT 0,
+          last_login TEXT,
+          last_logout TEXT
         )
       `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS user_sessions (
+          session_id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+      try {
+        await client.execute("ALTER TABLE users ADD COLUMN is_online INTEGER DEFAULT 0");
+        await client.execute("ALTER TABLE users ADD COLUMN last_login TEXT");
+        await client.execute("ALTER TABLE users ADD COLUMN last_logout TEXT");
+      } catch (e) {
+        // Ignore if columns already exist
+      }
 
       await client.execute(`
         CREATE TABLE IF NOT EXISTS enrollments (
@@ -3707,6 +3868,49 @@ export const initTursoDB = async () => {
           created_at TEXT NOT NULL
         )
       `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS referrals (
+          id TEXT PRIMARY KEY,
+          referrer_id TEXT NOT NULL,
+          referee_name TEXT NOT NULL,
+          referee_email TEXT,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS referral_gifts (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          milestone INTEGER NOT NULL,
+          gift_selected TEXT,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS daily_quizzes (
+          id TEXT PRIMARY KEY,
+          date TEXT NOT NULL,
+          title TEXT NOT NULL,
+          questions TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS quiz_submissions (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          quiz_id TEXT NOT NULL,
+          score INTEGER NOT NULL,
+          submitted_at TEXT NOT NULL
+        )
+      `);
+
 
       // Migrate: add missing columns to lessons table
       const lessonCols = [
@@ -7172,3 +7376,183 @@ export const createAILessonContent = async (content: AILessonContent): Promise<v
   }
 };
 
+// --- REFERRAL & QUIZ TYPES & API ---
+export interface Referral {
+  id: string;
+  referrer_id: string;
+  referee_name: string;
+  referee_email?: string;
+  status: 'pending' | 'successful';
+  created_at: string;
+}
+
+export interface ReferralGift {
+  id: string;
+  student_id: string;
+  milestone: number; // 3 or 5
+  gift_selected: string | null;
+  status: 'locked' | 'eligible' | 'delivered';
+  created_at: string;
+}
+
+export interface DailyQuiz {
+  id: string;
+  date: string;
+  title: string;
+  questions: string; // JSON array of questions: { q: string, options: string[], answer: string }
+  created_at: string;
+}
+
+export interface QuizSubmission {
+  id: string;
+  student_id: string;
+  quiz_id: string;
+  score: number;
+  submitted_at: string;
+}
+
+const REFERRALS_LOCAL_KEY = 'cynexai_local_referrals';
+const REFERRAL_GIFTS_LOCAL_KEY = 'cynexai_local_referral_gifts';
+const DAILY_QUIZZES_LOCAL_KEY = 'cynexai_local_daily_quizzes';
+const QUIZ_SUBMISSIONS_LOCAL_KEY = 'cynexai_local_quiz_submissions';
+
+export const getReferrals = async (studentId?: string): Promise<Referral[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const q = studentId ? "SELECT * FROM referrals WHERE referrer_id = ? ORDER BY created_at DESC" : "SELECT * FROM referrals ORDER BY created_at DESC";
+      const result = await client.execute(studentId ? { sql: q, args: [studentId] } : q);
+      return result.rows as unknown as Referral[];
+    } catch (e) { console.error("Failed to fetch referrals", e); }
+  }
+  const local = localStorage.getItem(REFERRALS_LOCAL_KEY);
+  const refs: Referral[] = local ? JSON.parse(local) : [];
+  return studentId ? refs.filter(r => r.referrer_id === studentId) : refs;
+};
+
+export const createReferral = async (ref: Referral): Promise<void> => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "INSERT INTO referrals (id, referrer_id, referee_name, referee_email, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        args: [ref.id, ref.referrer_id, ref.referee_name, ref.referee_email || '', ref.status, ref.created_at]
+      });
+      return;
+    } catch (e) { console.error("Failed to create referral", e); }
+  }
+  const local = localStorage.getItem(REFERRALS_LOCAL_KEY);
+  const refs: Referral[] = local ? JSON.parse(local) : [];
+  refs.push(ref);
+  localStorage.setItem(REFERRALS_LOCAL_KEY, JSON.stringify(refs));
+};
+
+export const updateReferralStatus = async (id: string, status: 'pending' | 'successful'): Promise<void> => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({ sql: "UPDATE referrals SET status = ? WHERE id = ?", args: [status, id] });
+      return;
+    } catch (e) { console.error("Failed to update referral", e); }
+  }
+  const local = localStorage.getItem(REFERRALS_LOCAL_KEY);
+  if (local) {
+    const refs: Referral[] = JSON.parse(local);
+    const idx = refs.findIndex(r => r.id === id);
+    if (idx !== -1) {
+      refs[idx].status = status;
+      localStorage.setItem(REFERRALS_LOCAL_KEY, JSON.stringify(refs));
+    }
+  }
+};
+
+export const getReferralGifts = async (studentId?: string): Promise<ReferralGift[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const q = studentId ? "SELECT * FROM referral_gifts WHERE student_id = ? ORDER BY created_at DESC" : "SELECT * FROM referral_gifts ORDER BY created_at DESC";
+      const result = await client.execute(studentId ? { sql: q, args: [studentId] } : q);
+      return result.rows as unknown as ReferralGift[];
+    } catch (e) { console.error("Failed to fetch referral gifts", e); }
+  }
+  const local = localStorage.getItem(REFERRAL_GIFTS_LOCAL_KEY);
+  const gifts: ReferralGift[] = local ? JSON.parse(local) : [];
+  return studentId ? gifts.filter(g => g.student_id === studentId) : gifts;
+};
+
+export const saveReferralGift = async (gift: ReferralGift): Promise<void> => {
+  if (isTursoConfigured && client) {
+    try {
+      const existing = await client.execute({ sql: "SELECT id FROM referral_gifts WHERE id = ?", args: [gift.id] });
+      if (existing.rows.length > 0) {
+        await client.execute({
+          sql: "UPDATE referral_gifts SET gift_selected = ?, status = ? WHERE id = ?",
+          args: [gift.gift_selected, gift.status, gift.id]
+        });
+      } else {
+        await client.execute({
+          sql: "INSERT INTO referral_gifts (id, student_id, milestone, gift_selected, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+          args: [gift.id, gift.student_id, gift.milestone, gift.gift_selected, gift.status, gift.created_at]
+        });
+      }
+      return;
+    } catch (e) { console.error("Failed to save referral gift", e); }
+  }
+  const local = localStorage.getItem(REFERRAL_GIFTS_LOCAL_KEY);
+  const gifts: ReferralGift[] = local ? JSON.parse(local) : [];
+  const idx = gifts.findIndex(g => g.id === gift.id);
+  if (idx !== -1) { gifts[idx] = gift; } else { gifts.push(gift); }
+  localStorage.setItem(REFERRAL_GIFTS_LOCAL_KEY, JSON.stringify(gifts));
+};
+
+export const getDailyQuizzes = async (): Promise<DailyQuiz[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const result = await client.execute("SELECT * FROM daily_quizzes ORDER BY date DESC");
+      return result.rows as unknown as DailyQuiz[];
+    } catch (e) { console.error("Failed to fetch quizzes", e); }
+  }
+  const local = localStorage.getItem(DAILY_QUIZZES_LOCAL_KEY);
+  return local ? JSON.parse(local) : [];
+};
+
+export const createDailyQuiz = async (quiz: DailyQuiz): Promise<void> => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "INSERT INTO daily_quizzes (id, date, title, questions, created_at) VALUES (?, ?, ?, ?, ?)",
+        args: [quiz.id, quiz.date, quiz.title, quiz.questions, quiz.created_at]
+      });
+      return;
+    } catch (e) { console.error("Failed to create quiz", e); }
+  }
+  const local = localStorage.getItem(DAILY_QUIZZES_LOCAL_KEY);
+  const quizzes: DailyQuiz[] = local ? JSON.parse(local) : [];
+  quizzes.push(quiz);
+  localStorage.setItem(DAILY_QUIZZES_LOCAL_KEY, JSON.stringify(quizzes));
+};
+
+export const getQuizSubmissions = async (studentId?: string): Promise<QuizSubmission[]> => {
+  if (isTursoConfigured && client) {
+    try {
+      const q = studentId ? "SELECT * FROM quiz_submissions WHERE student_id = ?" : "SELECT * FROM quiz_submissions";
+      const result = await client.execute(studentId ? { sql: q, args: [studentId] } : q);
+      return result.rows as unknown as QuizSubmission[];
+    } catch (e) { console.error("Failed to fetch quiz submissions", e); }
+  }
+  const local = localStorage.getItem(QUIZ_SUBMISSIONS_LOCAL_KEY);
+  const subs: QuizSubmission[] = local ? JSON.parse(local) : [];
+  return studentId ? subs.filter(s => s.student_id === studentId) : subs;
+};
+
+export const createQuizSubmission = async (sub: QuizSubmission): Promise<void> => {
+  if (isTursoConfigured && client) {
+    try {
+      await client.execute({
+        sql: "INSERT INTO quiz_submissions (id, student_id, quiz_id, score, submitted_at) VALUES (?, ?, ?, ?, ?)",
+        args: [sub.id, sub.student_id, sub.quiz_id, sub.score, sub.submitted_at]
+      });
+      return;
+    } catch (e) { console.error("Failed to submit quiz", e); }
+  }
+  const local = localStorage.getItem(QUIZ_SUBMISSIONS_LOCAL_KEY);
+  const subs: QuizSubmission[] = local ? JSON.parse(local) : [];
+  subs.push(sub);
+  localStorage.setItem(QUIZ_SUBMISSIONS_LOCAL_KEY, JSON.stringify(subs));
+};

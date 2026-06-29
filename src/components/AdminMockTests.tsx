@@ -11,7 +11,7 @@ import {
 import {
   getMockTests, createMockTest, deleteMockTest, updateMockTest,
   getQuestions, addQuestion, deleteQuestion, updateQuestion,
-  getTestResults, getCourses, getBatches,
+  getTestResults, getCourses, getBatches, updateTestResultRanking,
   MockTest, Question, TestResult, Course, Batch, ProctoringLog
 } from '../lib/turso';
 import { generateMockTestQuestions, fixSpellingAndGrammar, translateQuestions, addAnswerExplanationsAI, makeSimple, changeQuestionFormat } from '../lib/gemini';
@@ -24,7 +24,9 @@ const AdminMockTests = () => {
   const [loading, setLoading] = useState(true);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [selectedResultReport, setSelectedResultReport] = useState<TestResult | null>(null);
-  const [reportTab, setReportTab] = useState<'proctoring' | 'confidence'>('proctoring');
+  const [reportTab, setReportTab] = useState<'proctoring' | 'confidence' | 'answers'>('proctoring');
+  const [rankingInput, setRankingInput] = useState('');
+  const [savingRanking, setSavingRanking] = useState(false);
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
   const [editingTest, setEditingTest] = useState<MockTest | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +86,29 @@ const AdminMockTests = () => {
   useEffect(() => {
     if (selectedTestId) loadQuestions();
   }, [selectedTestId]);
+
+  useEffect(() => {
+    if (selectedResultReport) {
+      setRankingInput(selectedResultReport.ranking?.toString() || '');
+    }
+  }, [selectedResultReport]);
+
+  const handleSaveRanking = async () => {
+    if (!selectedResultReport) return;
+    setSavingRanking(true);
+    try {
+      await updateTestResultRanking(selectedResultReport.id, rankingInput);
+      setResults(results.map(r => r.id === selectedResultReport.id ? { ...r, ranking: rankingInput } : r));
+      setSelectedResultReport({ ...selectedResultReport, ranking: rankingInput });
+      setSuccess('Ranking saved successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e) {
+      setError('Failed to save ranking');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setSavingRanking(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -1944,6 +1969,15 @@ const AdminMockTests = () => {
             ? { text: 'WARNING', color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' }
             : { text: 'SECURE', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' };
 
+          let parsedAnswers: { selectedAnswers?: Record<string, number>, codingAnswers?: Record<string, string> } = {};
+          if (selectedResultReport.studentAnswers) {
+            try {
+              parsedAnswers = JSON.parse(selectedResultReport.studentAnswers);
+            } catch (e) {
+              console.error('Failed to parse student answers:', e);
+            }
+          }
+
           return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -1970,7 +2004,7 @@ const AdminMockTests = () => {
                 </div>
 
                 {/* KPI Card Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                   <div className="bg-slate-900 border border-white/5 p-4 rounded-2xl">
                     <div className="text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1">Score Obtained</div>
                     <div className="text-lg font-black text-white">{selectedResultReport.score} / {selectedResultReport.totalQuestions}</div>
@@ -1997,6 +2031,13 @@ const AdminMockTests = () => {
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">End Status</div>
                   </div>
+                  <div className="bg-slate-900 border border-white/5 p-4 rounded-2xl">
+                    <div className="text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1">Ranking</div>
+                    <div className="text-lg font-black text-white truncate">
+                      {selectedResultReport.ranking || '—'}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">Assigned Rank</div>
+                  </div>
                 </div>
 
                 {/* Tabs */}
@@ -2020,6 +2061,16 @@ const AdminMockTests = () => {
                     }`}
                   >
                     <TrendingUp size={14} /> Metacognitive Calibration
+                  </button>
+                  <button
+                    onClick={() => setReportTab('answers')}
+                    className={`flex items-center gap-2 px-5 py-3 text-xs uppercase tracking-wider font-black border-b-2 transition-all ${
+                      reportTab === 'answers'
+                        ? 'border-[#41c8df] text-[#41c8df]'
+                        : 'border-transparent text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    <ClipboardList size={14} /> Answers & Ranking
                   </button>
                 </div>
 
@@ -2079,7 +2130,7 @@ const AdminMockTests = () => {
                       </div>
                     )}
                   </div>
-                ) : (
+                ) : reportTab === 'confidence' ? (
                   <div className="space-y-6">
                     {/* Calibration Summary widgets */}
                     <div className="bg-slate-900 border border-white/5 p-6 rounded-[1.5rem]">
@@ -2147,7 +2198,99 @@ const AdminMockTests = () => {
                       </div>
                     )}
                   </div>
-                )}
+                ) : reportTab === 'answers' ? (
+                  <div className="space-y-6">
+                    <div className="bg-slate-900 border border-white/5 p-6 rounded-[1.5rem] flex items-center justify-between gap-4 flex-wrap">
+                      <div>
+                        <h4 className="text-sm font-black uppercase text-white mb-1 flex items-center gap-2">
+                          <Award className="text-[#41c8df] w-4 h-4" /> Assign Ranking
+                        </h4>
+                        <p className="text-xs text-gray-400">
+                          Set the student's final ranking based on their score and overall performance.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          value={rankingInput}
+                          onChange={(e) => setRankingInput(e.target.value)}
+                          placeholder="e.g., 1st, 2, A+"
+                          className="bg-black border border-white/10 rounded-lg px-4 py-2 text-white placeholder:text-gray-600 focus:outline-none focus:border-[#41c8df] transition-colors w-32"
+                        />
+                        <button
+                          onClick={handleSaveRanking}
+                          disabled={savingRanking}
+                          className="px-4 py-2 bg-[#41c8df] hover:bg-[#34a4b8] text-slate-950 font-bold rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {savingRanking ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider">Student Answers</h4>
+                      <div className="bg-slate-950 border border-white/10 rounded-[1.5rem] overflow-hidden divide-y divide-white/5 max-h-[50vh] overflow-y-auto">
+                        {questions.map((q, idx) => {
+                          const isCoding = q.type === 'coding' || q.type === 'sql';
+                          const studentAns = isCoding 
+                            ? parsedAnswers.codingAnswers?.[q.id] 
+                            : parsedAnswers.selectedAnswers?.[q.id];
+                          
+                          let isCorrect = false;
+                          if (!isCoding) {
+                            isCorrect = studentAns === q.correctAnswer;
+                          }
+
+                          return (
+                            <div key={q.id} className="p-4">
+                              <div className="flex items-start justify-between gap-4 mb-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[9px] font-black uppercase text-gray-500">Q{idx + 1}</span>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{q.type}</span>
+                                  </div>
+                                  <p className="text-sm text-gray-200">{q.text}</p>
+                                </div>
+                                {!isCoding && (
+                                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg shrink-0 ${
+                                    isCorrect 
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                  }`}>
+                                    {isCorrect ? 'Correct' : 'Incorrect'}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                                  <div className="text-[9px] font-black text-gray-500 uppercase tracking-wider mb-2">Student's Answer</div>
+                                  <div className="text-xs text-white font-medium break-words">
+                                    {isCoding ? (
+                                      <pre className="text-[10px] font-mono text-gray-300 bg-black/50 p-2 rounded max-h-32 overflow-auto">
+                                        {studentAns || 'No code submitted'}
+                                      </pre>
+                                    ) : (
+                                      studentAns !== undefined && q.options ? q.options[studentAns as number] : <span className="text-gray-500 italic">No answer</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {!isCoding && (
+                                  <div className="bg-emerald-500/5 rounded-xl p-3 border border-emerald-500/10">
+                                    <div className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mb-2">Correct Answer</div>
+                                    <div className="text-xs text-emerald-100 font-medium break-words">
+                                      {q.correctAnswer !== undefined && q.options ? q.options[q.correctAnswer] : '—'}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="flex mt-8 pt-4 border-t border-white/5">
                   <button onClick={() => setSelectedResultReport(null)}
